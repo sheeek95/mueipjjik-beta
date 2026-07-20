@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>뭐입찍?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FFF7EE;
+    --card:#FFFFFF;
+    --peach:#FFB59B;
+    --peach-deep:#FF8B65;
+    --sage:#AFD8A0;
+    --sage-deep:#6FA85D;
+    --sky:#CDE7F0;
+    --sky-deep:#8FC2D6;
+    --ink:#3E2F2A;
+    --ink-soft:#9A8B83;
+    --line:#F1E4D6;
+    --danger:#E36B6B;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:#EDE3D6; font-family:'Gowun Dodum',sans-serif; color:var(--ink);
+    display:flex; justify-content:center; min-height:100vh;
+  }
+  .display{font-family:'Jua',sans-serif;}
+  #frame{
+    width:100%; max-width:420px; min-height:100vh; background:var(--bg); position:relative;
+    display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 40px rgba(0,0,0,0.08);
+  }
+  .screen{ display:none; flex:1; flex-direction:column; padding-bottom:84px; }
+  .screen.active{ display:flex; }
+  /* ---------- top bar ---------- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:18px 20px 8px; }
+  .topbar h1{ font-size:20px; margin:0; }
+  .icon-btn{ background:none; border:none; font-size:20px; cursor:pointer; padding:6px; border-radius:50%; }
+  .icon-btn:active{ background:var(--line); }
+
+  /* ---------- onboarding ---------- */
+  #onb{ justify-content:center; align-items:center; text-align:center; padding:40px 28px; gap:18px;}
+  .hamster{ width:120px; height:120px; }
+  .obtitle{ font-size:26px; margin:6px 0 2px;}
+  .obsub{ color:var(--ink-soft); font-size:14px; margin-bottom:10px; line-height:1.5;}
+  .chip-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .chip{
+    padding:12px 20px; border-radius:999px; border:2px solid var(--line); background:var(--card);
+    cursor:pointer; font-family:'Gowun Dodum'; font-size:14px; color:var(--ink); transition:.15s;
+  }
+  .chip.selected{ border-color:var(--peach-deep); background:#FFEFE7; color:var(--peach-deep); font-weight:700;}
+  .obinput{
+    width:100%; max-width:280px; padding:14px 16px; border-radius:14px; border:2px solid var(--line);
+    font-family:'Gowun Dodum'; font-size:15px; text-align:center; background:var(--card);
+  }
+  .primary-btn{
+    width:100%; max-width:280px; padding:15px; border-radius:14px; border:none; background:var(--peach-deep);
+    color:white; font-family:'Jua'; font-size:16px; cursor:pointer; margin-top:6px;
+  }
+  .primary-btn:disabled{ background:#E8DCCF; color:#B5A79C; cursor:not-allowed; }
+  .ghost-btn{ background:none; border:none; color:var(--ink-soft); font-size:13px; text-decoration:underline; cursor:pointer; margin-top:4px;}
+  .progress-dots{ display:flex; gap:6px; margin-bottom:4px;}
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--line);}
+  .dot.on{ background:var(--peach-deep); }
+
+  /* ---------- home ---------- */
+  .weather-card{
+    margin:6px 20px 14px; background:linear-gradient(160deg, var(--sky), #E8F4F8); border-radius:24px;
+    padding:20px; position:relative; overflow:hidden;
+  }
+  .wc-top{ display:flex; align-items:center; justify-content:space-between; }
+  .wc-loc{ font-size:14px; color:#3A5E68; font-weight:700; display:flex; align-items:center; gap:4px;}
+  .wc-temp{ font-size:52px; font-family:'Jua'; line-height:1; margin:6px 0 0; color:#2C4A52;}
+  .wc-feel{ font-size:13px; color:#4E7178; }
+  .wc-emoji{ font-size:54px; position:absolute; right:18px; top:14px; }
+  .wc-stats{ display:flex; gap:14px; margin-top:14px; }
+  .wc-stat{ background:rgba(255,255,255,0.55); border-radius:12px; padding:8px 12px; font-size:12px; color:#2C4A52;}
+  .wc-stat b{ display:block; font-size:15px; }
+
+  .fairy-bubble{
+    margin:0 20px 16px; background:var(--card); border-radius:20px; padding:14px 16px; display:flex; gap:12px;
+    align-items:flex-start; box-shadow:0 2px 10px rgba(0,0,0,0.04);
+  }
+  .fairy-bubble .fairy-avatar{ width:44px; height:44px; flex-shrink:0; }
+  .fairy-bubble p{ margin:2px 0 0; font-size:14px; line-height:1.5; }
+  .fairy-bubble .name{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:2px; }
+
+  .section-title{ padding:0 20px; font-family:'Jua'; font-size:17px; margin:10px 0 8px; }
+  .style-scroll{ display:flex; gap:8px; padding:0 20px 4px; overflow-x:auto; }
+  .style-chip{
+    flex-shrink:0; padding:9px 16px; border-radius:999px; background:var(--card); border:2px solid var(--line);
+    font-size:13px; cursor:pointer; white-space:nowrap;
+  }
+  .style-chip.selected{ background:var(--sage); border-color:var(--sage-deep); color:#2E4E22; font-weight:700; }
+
+  .outfit-card{
+    margin:12px 20px 0; background:var(--card); border-radius:20px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,0.04);
+  }
+  .outfit-tier{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:4px; }
+  .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
+  .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
+  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700;}
+
+  /* ---------- chat ---------- */
+  .tab-row{ display:flex; margin:10px 20px 6px; background:var(--line); border-radius:14px; padding:4px; }
+  .tab-btn{ flex:1; text-align:center; padding:10px; border-radius:11px; font-size:13px; cursor:pointer; font-weight:700; color:var(--ink-soft); }
+  .tab-btn.active{ background:var(--card); color:var(--peach-deep); }
+  .chat-body{ flex:1; overflow-y:auto; padding:10px 16px; display:flex; flex-direction:column; gap:12px; }
+  .msg{ max-width:78%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; }
+  .msg.bot{ background:var(--card); align-self:flex-start; border-bottom-left-radius:4px; box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+  .msg.user{ background:var(--peach-deep); color:white; align-self:flex-end; border-bottom-right-radius:4px; }
+  .msg img{ max-width:100%; border-radius:10px; margin-top:6px; display:block;}
+  .bot-row{ display:flex; gap:8px; align-items:flex-end; }
+  .bot-row .avatar{ width:28px; height:28px; flex-shrink:0; }
+  .chat-input-bar{ display:flex; gap:8px; padding:10px 14px 14px; border-top:1px solid var(--line); background:var(--bg); align-items:center;}
+  .chat-input-bar input[type=text]{ flex:1; border:2px solid var(--line); border-radius:20px; padding:11px 16px; font-family:'Gowun Dodum'; font-size:14px; }
+  .round-btn{ width:42px; height:42px; border-radius:50%; border:none; background:var(--card); border:2px solid var(--line); cursor:pointer; font-size:17px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .send-btn{ background:var(--peach-deep); color:white; border:none; }
+  .fitting-panel{ padding:16px 20px; display:flex; flex-direction:column; gap:12px; }
+  .upload-slot{
+    border:2px dashed var(--line); border-radius:16px; padding:16px; text-align:center; cursor:pointer; font-size:13px; color:var(--ink-soft);
+    display:flex; flex-direction:column; align-items:center; gap:6px; background:var(--card);
+  }
+  .upload-slot img{ max-width:100%; max-height:120px; border-radius:10px; }
+  .note-box{ font-size:12px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px;}
+
+  /* ---------- settings ---------- */
+  .set-section{ margin:6px 20px 18px; }
+  .set-h{ font-family:'Jua'; font-size:15px; margin-bottom:8px; }
+  .set-row{
+    background:var(--card); border-radius:16px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:8px; font-size:14px; cursor:pointer;
+  }
+  .set-row .arrow{ color:var(--ink-soft); }
+  .switch{ position:relative; width:44px; height:26px; background:var(--line); border-radius:20px; cursor:pointer; flex-shrink:0; transition:.2s;}
+  .switch.on{ background:var(--sage-deep); }
+  .switch .knob{ position:absolute; top:3px; left:3px; width:20px; height:20px; background:white; border-radius:50%; transition:.2s; }
+  .switch.on .knob{ left:21px; }
+  .time-input{ border:2px solid var(--line); border-radius:10px; padding:5px 8px; font-family:'Gowun Dodum'; font-size:13px; }
+  .loc-item{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border-radius:14px; padding:12px 16px; margin-bottom:8px; font-size:14px;}
+  .add-loc-btn{ width:100%; padding:12px; border-radius:14px; border:2px dashed var(--line); background:none; color:var(--ink-soft); font-family:'Gowun Dodum'; cursor:pointer; }
+  .badge{ font-size:11px; padding:3px 8px; border-radius:8px; font-weight:700; }
+  .badge.wait{ background:#FFE9DC; color:var(--peach-deep); }
+  .badge.done{ background:#E2F1DE; color:var(--sage-deep); }
+  .empty-box{ text-align:center; padding:50px 20px; color:var(--ink-soft); font-size:14px; }
+  .modal-bg{ position:absolute; inset:0; background:rgba(0,0,0,0.4); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
+  .modal-bg.active{ display:flex; }
+  .modal{ background:var(--card); border-radius:20px; padding:22px; width:100%; max-width:320px; }
+  .modal h3{ margin:0 0 10px; font-family:'Jua'; }
+  .modal textarea, .modal select, .modal input{ width:100%; border:2px solid var(--line); border-radius:10px; padding:10px; font-family:'Gowun Dodum'; margin-bottom:10px; font-size:14px;}
+  .modal-btns{ display:flex; gap:8px; margin-top:6px; }
+  .modal-btns button{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Gowun Dodum'; font-weight:700; cursor:pointer; }
+  .btn-cancel{ background:var(--line); color:var(--ink-soft); }
+  .btn-confirm{ background:var(--peach-deep); color:white; }
+  .acc-row{ background:var(--card); border-radius:16px; padding:16px; margin-bottom:8px; font-size:14px; }
+  .acc-label{ color:var(--ink-soft); font-size:12px; margin-bottom:2px; }
+
+  /* ---------- notifications ---------- */
+  .noti-item{ background:var(--card); border-radius:16px; margin:0 20px 10px; padding:14px 16px; display:flex; gap:12px; }
+  .noti-emoji{ font-size:24px; }
+  .noti-time{ font-size:11px; color:var(--ink-soft); margin-top:4px; }
+
+  /* ---------- bottom nav ---------- */
+  #bottomnav{
+    position:absolute; bottom:0; left:0; right:0; background:var(--card); display:none;
+    justify-content:space-around; padding:10px 0 14px; border-top:1px solid var(--line);
+  }
+  #bottomnav.show{ display:flex; }
+  .nav-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--ink-soft); cursor:pointer; }
+  .nav-btn.active{ color:var(--peach-deep); font-weight:700; }
+  .nav-btn span.ic{ font-size:20px; }
+  ::-webkit-scrollbar{ display:none; }
+</style>
+</head>
+<body>
+<div id="frame">
+
+  <!-- ================= ONBOARDING ================= -->
+  <div class="screen active" id="onb">
+    <div id="onb-step-0">
+      <svg class="hamster" viewBox="0 0 100 100" role="img" aria-label="패션요정 핏치">
+        <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
+        <ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="74" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/>
+        <circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/>
+        <ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/>
+        <path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="obtitle display">뭐입찍?</div>
+      <div class="obsub">오늘 뭐 입을지 고민될 땐,<br>패션요정 <b>핏치</b>가 골라줄게!</div>
+      <button class="primary-btn" onclick="goStep(1)">시작하기</button>
+      <p style="font-size:11px; color:var(--ink-soft); margin-top:14px;">* 베타 기간에는 가입 없이 바로 이용할 수 있어요</p>
+    </div>
+
+    <div id="onb-step-1" style="display:none;">
+      <div class="progress-dots"><div class="dot on"></div><div class="dot"></div><div class="dot"></div></div>
+      <svg class="hamster" viewBox="0 0 100 100" role="img" aria-label="패션요정 핏치">
+        <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
+        <ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="74" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/>
+        <circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/>
+        <ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/>
+        <path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="obtitle display">성별을 알려줄래?</div>
+      <div class="obsub">체형에 맞는 옷을 추천해줄게</div>
+      <div class="chip-row">
+        <div class="chip" data-v="여성" onclick="pick('gender',this)">여성</div>
+        <div class="chip" data-v="남성" onclick="pick('gender',this)">남성</div>
+        <div class="chip" data-v="선택안함" onclick="pick('gender',this)">선택 안 함</div>
+      </div>
+      <button class="primary-btn" id="btn-step1" disabled onclick="goStep(2)">다음</button>
+    </div>
+
+    <div id="onb-step-2" style="display:none;">
+      <div class="progress-dots"><div class="dot on"></div><div class="dot on"></div><div class="dot"></div></div>
+      <svg class="hamster" viewBox="0 0 100 100" role="img" aria-label="패션요정 핏치">
+        <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
+        <ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="74" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/>
+        <circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/>
+        <ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/>
+        <path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="obtitle display">키가 어떻게 돼?</div>
+      <div class="obsub">핏감 추천에 참고할게 (cm)</div>
+      <input class="obinput" type="number" id="heightInput" placeholder="예: 165" oninput="document.getElementById('btn-step2').disabled = !this.value">
+      <button class="primary-btn" id="btn-step2" disabled onclick="goStep(3)">다음</button>
+    </div>
+
+    <div id="onb-step-3" style="display:none;">
+      <div class="progress-dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div></div>
+      <svg class="hamster" viewBox="0 0 100 100" role="img" aria-label="패션요정 핏치">
+        <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
+        <ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="74" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/>
+        <circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/>
+        <ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/>
+        <path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="obtitle display">위치 확인할게!</div>
+      <div class="obsub">현재 위치를 기반으로 날씨를 알려줄게<br>(브라우저가 위치 권한을 물어봐요)</div>
+      <button class="primary-btn" onclick="finishOnboarding()">시작하기</button>
+      <button class="ghost-btn" onclick="finishOnboarding()">나중에 설정할게요 (서울 기준으로 볼게)</button>
+    </div>
+  </div>
+
+  <!-- ================= HOME ================= -->
+  <div class="screen" id="home">
+    <div class="topbar">
+      <div>
+        <div class="wc-loc" id="homeLocText">📍 위치 확인 중...</div>
+      </div>
+      <button class="icon-btn" onclick="go('noti')">🔔</button>
+    </div>
+
+    <div class="weather-card">
+      <div class="wc-emoji" id="wxEmoji">⛅</div>
+      <div class="wc-temp"><span id="wxTemp">--</span>°</div>
+      <div class="wc-feel">체감 <span id="wxFeel">--</span>° · <span id="wxDesc">불러오는 중</span></div>
+      <div class="wc-stats">
+        <div class="wc-stat">강수확률<b id="wxRain">--%</b></div>
+        <div class="wc-stat">습도<b id="wxHumid">--%</b></div>
+      </div>
+    </div>
+
+    <div class="fairy-bubble">
+      <svg class="fairy-avatar" viewBox="0 0 100 100" role="img" aria-label="핏치">
+        <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
+        <ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/>
+        <circle cx="26" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="74" cy="30" r="7" fill="#FFC6B0"/>
+        <circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/>
+        <circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/>
+        <circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/>
+        <ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/>
+        <path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="name">핏치의 한마디</div>
+        <p id="fairyTip">오늘 날씨 확인하고 있어, 조금만 기다려줘!</p>
+      </div>
+    </div>
+
+    <div class="section-title display">스타일 골라줄래?</div>
+    <div class="style-scroll" id="styleScroll"></div>
+
+    <div class="outfit-card" id="outfitCard">
+      <div class="outfit-tier" id="outfitTier">추천 옷차림</div>
+      <div class="outfit-items" id="outfitItems"></div>
+      <div class="style-tip" id="styleTip"></div>
+    </div>
+  </div>
+
+  <!-- ================= CHAT ================= -->
+  <div class="screen" id="chat">
+    <div class="topbar"><h1 class="display">AI 채팅</h1><div style="width:32px"></div></div>
+    <div class="tab-row">
+      <div class="tab-btn active" id="tab-coach" onclick="switchChatTab('coach')">코디 상담</div>
+      <div class="tab-btn" id="tab-fit" onclick="switchChatTab('fit')">AI 피팅 미리보기</div>
+    </div>
+
+    <div id="chatCoachView" style="flex:1; display:flex; flex-direction:column;">
+      <div class="chat-body" id="chatBody"></div>
+      <div class="chat-input-bar">
+        <button class="round-btn" onclick="document.getElementById('imgUpload').click()">📷</button>
+        <input type="file" id="imgUpload" accept="image/*" style="display:none" onchange="onImagePicked(event)">
+        <input type="text" id="chatInputText" placeholder="핏치에게 물어보기...">
+        <button class="round-btn send-btn" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+
+    <div id="chatFitView" style="display:none; flex:1; flex-direction:column;">
+      <div class="fitting-panel" style="align-items:center; text-align:center; justify-content:center; flex:1;">
+        <div style="font-size:44px;">🔒</div>
+        <div class="obtitle display" style="font-size:20px; margin:4px 0 0;">AI 피팅, 준비 중이에요</div>
+        <div class="obsub" style="margin-bottom:0;">핏치가 더 정확한 미리보기를 만들려고<br>열심히 준비하고 있어! 조금만 기다려줘 🐹</div>
+        <div class="note-box" style="text-align:left;">베타 기간에는 <b>코디 상담</b> 탭에서 먼저 사진으로 색조합·핏 피드백을 받아볼 수 있어요.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SETTINGS ================= -->
+  <div class="screen" id="settings">
+    <div class="topbar"><h1 class="display">설정</h1><div style="width:32px"></div></div>
+    <div style="overflow-y:auto; flex:1;">
+      <div class="set-section">
+        <div class="set-h">내 위치</div>
+        <div id="locList"></div>
+        <button class="add-loc-btn" onclick="openModal('addLoc')">+ 위치 추가하기</button>
+      </div>
+
+      <div class="set-section">
+        <div class="set-h">약관 및 정책</div>
+        <div class="set-row" onclick="openModal('terms')"><span>약관 및 정책 보기</span><span class="arrow">›</span></div>
+      </div>
+
+      <div class="set-section">
+        <div class="note-box">🐹 베타 서비스 기간에는 알림 설정, 문의하기, 계정 관리 기능은 준비 중이에요. 조금만 기다려줘!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NOTIFICATIONS ================= -->
+  <div class="screen" id="noti">
+    <div class="topbar"><h1 class="display">알림</h1><div style="width:32px"></div></div>
+    <div id="notiList" style="overflow-y:auto; flex:1; padding-top:6px;"></div>
+  </div>
+
+  <!-- bottom nav -->
+  <div id="bottomnav">
+    <button class="nav-btn active" id="nav-home" onclick="go('home')"><span class="ic">🏠</span>홈</button>
+    <button class="nav-btn" id="nav-chat" onclick="go('chat')"><span class="ic">💬</span>AI채팅</button>
+    <button class="nav-btn" id="nav-noti" onclick="go('noti')"><span class="ic">🔔</span>알림</button>
+    <button class="nav-btn" id="nav-settings" onclick="go('settings')"><span class="ic">⚙️</span>설정</button>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+  <div class="modal-bg" id="modal-addLoc">
+    <div class="modal">
+      <h3>위치 추가</h3>
+      <input type="text" id="newLocName" placeholder="예: 부산, 제주">
+      <div class="modal-btns"><button class="btn-cancel" onclick="closeModal('addLoc')">취소</button><button class="btn-confirm" onclick="addLocation()">추가</button></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="modal-terms">
+    <div class="modal">
+      <h3>약관 및 정책</h3>
+      <p style="font-size:13px; color:var(--ink-soft); line-height:1.6;">서비스 이용약관, 개인정보 처리방침, 위치기반서비스 이용약관 (프로토타입 예시 문구)</p>
+      <div class="modal-btns"><button class="btn-confirm" style="flex:none; width:100%;" onclick="closeModal('terms')">닫기</button></div>
+    </div>
+  </div>
+
+
+</div>
+
+<script>
+/* =============== STATE =============== */
+const state = {
+  gender:null, height:null,
+  loc:{name:'서울', lat:37.5665, lon:126.9780},
+  extraLocs:[],
+  style:'캐주얼',
+  notis:[
+    {emoji:'🌡️', text:'오늘은 기온차가 있는 편이니 얇은 겉옷을 챙겨가는 걸 추천해!', time:'오전 7:30'},
+    {emoji:'👕', text:'오늘 추천 코디가 도착했어! 확인해봐', time:'오전 8:00'},
+    {emoji:'☔', text:'오후에 비 소식이 있어. 우산 챙기는 거 잊지 마!', time:'오전 7:31'}
+  ],
+  inquiries:[],
+  fitImgs:{face:null, clothes:null}
+};
+
+/* =============== ONBOARDING =============== */
+function goStep(n){
+  for(let i=0;i<=3;i++) document.getElementById('onb-step-'+i).style.display = 'none';
+  document.getElementById('onb-step-'+n).style.display = 'block';
+}
+function pick(field, el){
+  document.querySelectorAll('#onb-step-1 .chip').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  state[field] = el.dataset.v;
+  document.getElementById('btn-step1').disabled = false;
+}
+function finishOnboarding(){
+  state.height = document.getElementById('heightInput').value || null;
+  document.getElementById('bottomnav').classList.add('show');
+  document.getElementById('onb').classList.remove('active');
+  document.getElementById('home').classList.add('active');
+  requestLocation();
+  renderStyleChips();
+  renderLocList();
+  renderNotis();
+  seedChat();
+}
+
+/* =============== NAV =============== */
+function go(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const map={home:'nav-home', chat:'nav-chat', settings:'nav-settings', noti:'nav-noti'};
+  if(map[name]) document.getElementById(map[name]).classList.add('active');
+}
+
+/* =============== WEATHER =============== */
+const WMO = {
+  0:['☀️','맑음'],1:['🌤️','대체로 맑음'],2:['⛅','구름 조금'],3:['☁️','흐림'],
+  45:['🌫️','안개'],48:['🌫️','짙은 안개'],
+  51:['🌦️','약한 이슬비'],53:['🌦️','이슬비'],55:['🌧️','강한 이슬비'],
+  61:['🌦️','약한 비'],63:['🌧️','비'],65:['🌧️','강한 비'],
+  71:['🌨️','약한 눈'],73:['🌨️','눈'],75:['❄️','강한 눈'],
+  80:['🌦️','소나기'],81:['🌧️','소나기'],82:['⛈️','강한 소나기'],
+  95:['⛈️','뇌우'],96:['⛈️','우박 동반 뇌우'],99:['⛈️','강한 뇌우']
+};
+function requestLocation(){
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      state.loc = {name:'현재 위치', lat:pos.coords.latitude, lon:pos.coords.longitude};
+      document.getElementById('homeLocText').textContent = '📍 현재 위치';
+      fetchWeather();
+    }, ()=>{ document.getElementById('homeLocText').textContent = '📍 서울 (기본 위치)'; fetchWeather(); });
+  } else {
+    document.getElementById('homeLocText').textContent = '📍 서울 (기본 위치)';
+    fetchWeather();
+  }
+}
+async function fetchWeather(){
+  try{
+    const {lat,lon} = state.loc;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&hourly=precipitation_probability&timezone=auto`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const cur = data.current;
+    const feel = Math.round(cur.apparent_temperature);
+    const temp = Math.round(cur.temperature_2m);
+    const wcode = cur.weather_code;
+    const [emoji, desc] = WMO[wcode] || ['⛅','알 수 없음'];
+    const rainProb = data.hourly && data.hourly.precipitation_probability ? data.hourly.precipitation_probability[0] : 0;
+
+    document.getElementById('wxTemp').textContent = temp;
+    document.getElementById('wxFeel').textContent = feel;
+    document.getElementById('wxDesc').textContent = desc;
+    document.getElementById('wxEmoji').textContent = emoji;
+    document.getElementById('wxRain').textContent = rainProb + '%';
+    document.getElementById('wxHumid').textContent = cur.relative_humidity_2m + '%';
+
+    renderOutfit(feel, rainProb);
+  }catch(e){
+    document.getElementById('wxDesc').textContent = '날씨 정보를 불러오지 못했어';
+    document.getElementById('fairyTip').textContent = '앗, 날씨 정보를 가져오는 데 문제가 생겼어. 네트워크를 확인해줘!';
+  }
+}
+
+/* =============== OUTFIT RECOMMENDATION =============== */
+const TIERS = [
+  {min:28, label:'28℃ 이상', items:['민소매','반팔','반바지','원피스']},
+  {min:23, label:'23~27℃', items:['반팔','얇은 셔츠','반바지','면바지']},
+  {min:20, label:'20~22℃', items:['얇은 가디건','긴팔','면바지','청바지']},
+  {min:17, label:'17~19℃', items:['얇은 니트','맨투맨','가디건','청바지']},
+  {min:12, label:'12~16℃', items:['자켓','가디건','스타킹','청바지','면바지']},
+  {min:9,  label:'9~11℃', items:['자켓','트렌치코트','니트','청바지','스타킹']},
+  {min:5,  label:'5~8℃', items:['코트','가죽자켓','히트텍','니트','레깅스']},
+  {min:-99,label:'4℃ 이하', items:['패딩','두꺼운 코트','목도리','기모제품']}
+];
+const STYLES = ['캐주얼','로맨틱','미니멀','포멀','스트릿'];
+const STYLE_FLAVOR = {
+  '캐주얼': {tip:'편하게 툭 걸치는 느낌으로! 스니커즈랑 매치하면 완벽해', extra:'스니커즈'},
+  '로맨틱': {tip:'부드러운 소재와 파스텔톤으로 은은하게 연출해봐', extra:'플랫슈즈'},
+  '미니멀': {tip:'무채색으로 컬러 수를 줄이고 핏에만 신경써봐', extra:'심플 로퍼'},
+  '포멀':   {tip:'단정한 라인으로 각 잡힌 느낌을 살려봐', extra:'구두'},
+  '스트릿': {tip:'오버핏 + 레이어드로 힘을 좀 줘볼까?', extra:'청키 스니커즈'}
+};
+function renderStyleChips(){
+  const wrap = document.getElementById('styleScroll');
+  wrap.innerHTML = STYLES.map(s=>`<div class="style-chip ${s===state.style?'selected':''}" onclick="selectStyle('${s}')">${s}</div>`).join('');
+}
+function selectStyle(s){
+  state.style = s;
+  renderStyleChips();
+  fetchWeather(); // re-render with same weather but new style (cheap: reuse last shown temp)
+}
+function renderOutfit(feel, rainProb){
+  const tier = TIERS.find(t=>feel>=t.min) || TIERS[TIERS.length-1];
+  document.getElementById('outfitTier').textContent = `체감 ${feel}℃ · ${tier.label} 추천 (${state.style})`;
+  const flavor = STYLE_FLAVOR[state.style];
+  document.getElementById('outfitItems').innerHTML =
+    tier.items.map(i=>`<div class="item-tag">${i}</div>`).join('') + `<div class="extra-tag">+ ${flavor.extra}</div>`;
+  document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
+
+  let tipMsg = `오늘 체감 ${feel}℃! ${tier.items[0]} 위주로 챙겨입어~`;
+  if(rainProb>=60) tipMsg += ' 비 올 확률 높으니까 우산도 꼭 챙기고!';
+  else if(Math.abs(feel-15)<8) tipMsg += ' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!';
+  document.getElementById('fairyTip').textContent = tipMsg;
+}
+
+/* =============== CLAUDE API HELPER =============== */
+async function callClaude(userContent){
+  // API 키는 브라우저에 없음. /api/chat (Cloudflare Pages Function)이 서버에서만 키를 사용해 Claude API를 호출함.
+  const res = await fetch('/api/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ content: userContent })
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || 'API 오류');
+  return data.reply;
+}
+
+/* =============== CHAT: COORDI TAB =============== */
+let pendingImage = null;
+function seedChat(){
+  addBotMsg('안녕! 나는 패션요정 핏치야 🐹 오늘 입은 코디 사진을 보내주면 색조합이랑 핏을 봐줄게. 궁금한 거 편하게 물어봐!');
+}
+function addBotMsg(text, imgSrc){
+  const body = document.getElementById('chatBody');
+  const row = document.createElement('div');
+  row.className='bot-row';
+  row.innerHTML = `<svg class="avatar" viewBox="0 0 100 100" role="img" aria-label="핏치"><circle cx="50" cy="50" r="49" fill="#FFE8D6"/><ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="30" r="7" fill="#FFC6B0"/><circle cx="74" cy="30" r="7" fill="#FFC6B0"/><circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/><circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/><ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/><path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/></svg><div class="msg bot">${text}${imgSrc?`<img src="${imgSrc}">`:''}</div>`;
+  body.appendChild(row);
+  body.scrollTop = body.scrollHeight;
+}
+function addUserMsg(text, imgSrc){
+  const body = document.getElementById('chatBody');
+  const div = document.createElement('div');
+  div.className='msg user';
+  div.innerHTML = `${text||''}${imgSrc?`<img src="${imgSrc}">`:''}`;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+function onImagePicked(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{ pendingImage = reader.result; sendChat(); };
+  reader.readAsDataURL(file);
+}
+async function sendChat(){
+  const input = document.getElementById('chatInputText');
+  const text = input.value.trim();
+  const img = pendingImage;
+  if(!text && !img) return;
+  addUserMsg(text, img);
+  input.value=''; pendingImage=null;
+  addBotMsg('음... 잠깐만, 살펴보고 있어 🐹💭');
+  const body = document.getElementById('chatBody');
+  const loadingRow = body.lastElementChild;
+  try{
+    const content = [];
+    if(text) content.push({type:'text', text: text});
+    else content.push({type:'text', text:'이 코디 어때? 색조합이랑 핏 좀 봐줘.'});
+    if(img){
+      const base64 = img.split(',')[1];
+      const mime = img.substring(5, img.indexOf(';'));
+      content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
+    }
+    const reply = await callClaude(content);
+    loadingRow.remove();
+    addBotMsg(reply);
+  }catch(err){
+    loadingRow.remove();
+    addBotMsg('앗, 지금 답변을 가져오지 못했어 😥 잠시 후 다시 시도해줄래?');
+  }
+}
+
+/* =============== CHAT: FIT TAB =============== */
+function switchChatTab(tab){
+  document.getElementById('tab-coach').classList.toggle('active', tab==='coach');
+  document.getElementById('tab-fit').classList.toggle('active', tab==='fit');
+  document.getElementById('chatCoachView').style.display = tab==='coach'?'flex':'none';
+  document.getElementById('chatFitView').style.display = tab==='fit'?'flex':'none';
+}
+
+
+/* =============== SETTINGS: LOCATION =============== */
+function renderLocList(){
+  const wrap = document.getElementById('locList');
+  const all = [{name:state.loc.name+' (현재)', main:true}, ...state.extraLocs.map(l=>({name:l.name}))];
+  wrap.innerHTML = all.map(l=>`<div class="loc-item"><span>📍 ${l.name}</span>${l.main?'<span class="badge done">기본</span>':''}</div>`).join('');
+}
+function openModal(name){ document.getElementById('modal-'+name).classList.add('active'); }
+function closeModal(name){ document.getElementById('modal-'+name).classList.remove('active'); }
+async function addLocation(){
+  const name = document.getElementById('newLocName').value.trim();
+  if(!name) return;
+  try{
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ko`);
+    const data = await res.json();
+    if(data.results && data.results[0]){
+      state.extraLocs.push({name: data.results[0].name});
+    } else {
+      state.extraLocs.push({name});
+    }
+  }catch(e){ state.extraLocs.push({name}); }
+  document.getElementById('newLocName').value='';
+  renderLocList();
+  closeModal('addLoc');
+}
+
+/* =============== SETTINGS: TOGGLES =============== */
+/* =============== NOTIFICATIONS =============== */
+function renderNotis(){
+  const wrap = document.getElementById('notiList');
+  wrap.innerHTML = state.notis.map(n=>`
+    <div class="noti-item">
+      <div class="noti-emoji">${n.emoji}</div>
+      <div>
+        <div style="font-size:14px;">${n.text}</div>
+        <div class="noti-time">${n.time}</div>
+      </div>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>
