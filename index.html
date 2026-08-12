@@ -103,6 +103,19 @@
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
   .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700;}
 
+  .product-section{ display:none; }
+  .product-section.show{ display:block; }
+  .product-scroll{ display:flex; gap:10px; padding:0 20px 4px; overflow-x:auto; }
+  .product-card{
+    flex-shrink:0; width:128px; background:var(--card); border-radius:16px; overflow:hidden;
+    box-shadow:0 2px 10px rgba(0,0,0,0.04); text-decoration:none; color:var(--ink); display:block;
+  }
+  .product-card img{ width:128px; height:128px; object-fit:cover; background:var(--line); display:block; }
+  .product-tag{ font-size:10px; color:var(--peach-deep); font-weight:700; padding:8px 10px 0; }
+  .product-title{ font-size:12px; padding:2px 10px; line-height:1.4; height:2.8em; overflow:hidden; }
+  .product-price{ font-size:13px; font-weight:700; padding:0 10px 10px; }
+  .product-mall{ font-size:10px; color:var(--ink-soft); padding:0 10px 10px; margin-top:-8px; }
+
   /* ---------- chat ---------- */
   .tab-row{ display:flex; margin:10px 20px 6px; background:var(--line); border-radius:14px; padding:4px; }
   .tab-btn{ flex:1; text-align:center; padding:10px; border-radius:11px; font-size:13px; cursor:pointer; font-weight:700; color:var(--ink-soft); }
@@ -324,6 +337,11 @@
       <div class="outfit-items" id="outfitItems"></div>
       <div class="style-tip" id="styleTip"></div>
     </div>
+
+    <div class="product-section" id="productSection">
+      <div class="section-title display">실제 코디템 추천</div>
+      <div class="product-scroll" id="productScroll"></div>
+    </div>
   </div>
 
   <!-- ================= CHAT ================= -->
@@ -418,6 +436,7 @@ const state = {
   activeIdx:'main',
   extraLocs:[],
   style:'캐주얼',
+  lastProductsKey:null,
   notis:[
     {emoji:'🌡️', text:'오늘은 기온차가 있는 편이니 얇은 겉옷을 챙겨가는 걸 추천해!', time:'오전 7:30'},
     {emoji:'👕', text:'오늘 추천 코디가 도착했어! 확인해봐', time:'오전 8:00'},
@@ -583,6 +602,49 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   else if(windSpeed>=WIND_BREEZY) tipMsg += ' 바람이 선선하게 부는 날이야~';
   if(!isSnow && !isRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8) tipMsg += ' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!';
   document.getElementById('fairyTip').textContent = tipMsg;
+
+  fetchAndRenderProducts(tier.items.slice(0,2), {feel, isRain, isSnow, style:state.style});
+}
+
+/* =============== 실제 코디템 추천 (네이버 쇼핑 검색) =============== */
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function fetchAndRenderProducts(items, weatherCtx){
+  const key = items.join(',') + '|' + JSON.stringify(weatherCtx);
+  if(state.lastProductsKey === key) return;
+  state.lastProductsKey = key;
+  try{
+    const res = await fetch('/api/products', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items, weather: weatherCtx })
+    });
+    const data = await res.json();
+    renderProducts(data.groups || []);
+  }catch(e){
+    renderProducts([]);
+  }
+}
+function renderProducts(groups){
+  const section = document.getElementById('productSection');
+  const scroll = document.getElementById('productScroll');
+  const cards = [];
+  groups.forEach(g=>{
+    (g.products||[]).forEach(p=>{
+      if(!p.link || !/^https?:\/\//.test(p.link)) return;
+      cards.push(`
+        <a class="product-card" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">
+          <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy">
+          <div class="product-tag">${escapeHtml(g.tag)}</div>
+          <div class="product-title">${escapeHtml(p.title)}</div>
+          <div class="product-price">${p.price ? Number(p.price).toLocaleString()+'원' : ''}</div>
+          <div class="product-mall">${escapeHtml(p.mall)}</div>
+        </a>`);
+    });
+  });
+  scroll.innerHTML = cards.join('');
+  section.classList.toggle('show', cards.length>0);
 }
 
 /* =============== AI 채팅 API HELPER =============== */
@@ -601,12 +663,14 @@ async function callFitchAI(userContent, weatherCtx){
 function currentWeatherCtx(){
   if(!state.lastWeather) return null;
   const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
+  const tier = TIERS.find(t=>feel>=t.min) || TIERS[TIERS.length-1];
   return {
     feel,
     isRain: RAIN_CODES.has(wcode) || rainProb>=50,
     isSnow: SNOW_CODES.has(wcode),
     windSpeed,
-    style: state.style
+    style: state.style,
+    items: tier.items.slice(0,2)
   };
 }
 
