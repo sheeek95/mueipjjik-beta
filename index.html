@@ -44,7 +44,10 @@
   .screen{ display:none; flex:1; flex-direction:column; padding-bottom:84px; overflow-y:auto; min-height:0; }
   .screen.active{ display:flex; }
   /* ---------- top bar ---------- */
-  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:max(18px, calc(env(safe-area-inset-top) + 10px)) 20px 8px; flex-shrink:0; }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; padding:max(18px, calc(env(safe-area-inset-top) + 10px)) 20px 8px;
+    flex-shrink:0; position:sticky; top:0; z-index:5; background:var(--bg);
+  }
   .topbar h1{ font-size:20px; margin:0; }
   .icon-btn{ background:none; border:none; font-size:20px; cursor:pointer; padding:6px; border-radius:50%; }
   .icon-btn:active{ background:var(--line); }
@@ -364,7 +367,7 @@
       <div class="tab-btn" id="tab-fit" onclick="switchChatTab('fit')">AI 피팅 미리보기</div>
     </div>
 
-    <div id="chatCoachView" style="flex:1; display:flex; flex-direction:column;">
+    <div id="chatCoachView" style="flex:1; display:flex; flex-direction:column; min-height:0;">
       <div class="chat-body" id="chatBody"></div>
       <div class="chat-input-bar">
         <button class="round-btn" onclick="document.getElementById('imgUpload').click()">📷</button>
@@ -387,7 +390,7 @@
   <!-- ================= SETTINGS ================= -->
   <div class="screen" id="settings">
     <div class="topbar"><h1 class="display">설정</h1><div style="width:32px"></div></div>
-    <div style="overflow-y:auto; flex:1;">
+    <div style="overflow-y:auto; flex:1; min-height:0;">
       <div class="set-section">
         <div class="set-h">내 정보</div>
         <div class="set-row" onclick="openModal('gender')"><span>성별</span><span style="display:flex; align-items:center; gap:6px;"><span id="genderValue" style="color:var(--ink-soft); font-size:13px;">선택 안 함</span><span class="arrow">›</span></span></div>
@@ -414,7 +417,7 @@
   <!-- ================= NOTIFICATIONS ================= -->
   <div class="screen" id="noti">
     <div class="topbar"><h1 class="display">알림</h1><div style="width:32px"></div></div>
-    <div id="notiList" style="overflow-y:auto; flex:1; padding-top:6px;"></div>
+    <div id="notiList" style="overflow-y:auto; flex:1; min-height:0; padding-top:6px;"></div>
   </div>
 
   <!-- bottom nav -->
@@ -576,7 +579,10 @@ function requestLocation(){
       try{
         const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=ko`);
         const data = await res.json();
-        name = [data.city || data.locality, data.principalSubdivision].filter(Boolean).join(' ') || '현재 위치';
+        // 서울/부산처럼 시(city)와 광역시도(principalSubdivision)가 같은 값일 때 "서울특별시 서울특별시"로 중복되는 것 방지
+        name = [data.city || data.locality, data.principalSubdivision]
+          .filter((v, i, arr) => v && arr.indexOf(v) === i)
+          .join(' ') || '현재 위치';
       }catch(e){ /* 역지오코딩 실패 시 기본 라벨 사용 */ }
       state.loc = {name, lat, lon};
       state.activeIdx = 'main';
@@ -1049,6 +1055,21 @@ document.getElementById('outfitItems').addEventListener('click', (e)=>{
   if(!tag) return;
   showProductsForItem(tag.dataset.item, tag);
 });
+
+/* =============== PC: 텍스트 입력에서 엔터 키로 전송/등록 =============== */
+function onEnterKey(inputId, action){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  el.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter' || e.isComposing) return; // 한글 조합(IME) 중 엔터는 무시
+    e.preventDefault();
+    action();
+  });
+}
+onEnterKey('chatInputText', sendChat);
+onEnterKey('newLocName', addLocation);
+onEnterKey('settingsHeightInput', saveSettingsHeight);
+onEnterKey('heightInput', ()=>{ if(!document.getElementById('btn-step2').disabled) goStep(3); });
 
 /* =============== INIT: 저장된 설정 있으면 온보딩 건너뛰기 =============== */
 function init(){
