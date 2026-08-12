@@ -25,7 +25,9 @@ const SYSTEM_PROMPT =
   "스타일리스트처럼 객관적인 피드백(색조합, 체형에 맞는 핏, 개선점, 추천 아이템)을 주되, " +
   "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써.";
 
-const TEXT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+// llama-3.1-8b-instruct는 2026-05-30부로 지원 종료돼서 gemma-4-26b-a4b-it(MoE, 4B 활성 파라미터,
+// 다국어 지원 우수)로 교체함. 이미지 채팅은 별도 검증된 vision 모델을 그대로 사용.
+const TEXT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 const MAX_TOKENS = 512;
 
@@ -94,8 +96,7 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ reply });
   } catch (err) {
-    // TODO(디버그용, 원인 확인 후 제거): 실제 에러 메시지를 그대로 응답에 노출
-    return jsonResponse({ error: '서버 오류가 발생했어요.', debug: String(err && err.stack || err) }, 500);
+    return jsonResponse({ error: '서버 오류가 발생했어요.' }, 500);
   }
 }
 

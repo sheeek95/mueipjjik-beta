@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>뭐입찍?</title>
+<meta name="theme-color" content="#FF8B65">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="뭐입찍">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
@@ -102,7 +109,8 @@
   }
   .outfit-tier{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:4px; }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
+  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; cursor:pointer; border:2px solid transparent; transition:.15s; }
+  .item-tag.picked{ border-color:#B45A34; background:#FFE1D0; font-weight:700; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
   .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700;}
 
@@ -343,7 +351,7 @@
     </div>
 
     <div class="product-section" id="productSection">
-      <div class="section-title display">실제 코디템 추천</div>
+      <div class="section-title display" id="productSectionTitle">실제 코디템 추천</div>
       <div class="product-scroll" id="productScroll"></div>
     </div>
   </div>
@@ -467,11 +475,7 @@ const state = {
   extraLocs:[],
   style:'캐주얼',
   lastProductsKey:null,
-  notis:[
-    {emoji:'🌡️', text:'오늘은 기온차가 있는 편이니 얇은 겉옷을 챙겨가는 걸 추천해!', time:'오전 7:30'},
-    {emoji:'👕', text:'오늘 추천 코디가 도착했어! 확인해봐', time:'오전 8:00'},
-    {emoji:'☔', text:'오후에 비 소식이 있어. 우산 챙기는 거 잊지 마!', time:'오전 7:31'}
-  ],
+  notis:[], // 날씨를 불러오면 실제 상황에 맞게 채워짐 (generateNotis 참고)
   inquiries:[],
   fitImgs:{face:null, clothes:null}
 };
@@ -745,7 +749,7 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
   document.getElementById('outfitItems').innerHTML =
-    pieces.map(i=>`<div class="item-tag">${i}</div>`).join('') +
+    pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
     extraTags.map(i=>`<div class="extra-tag">+ ${i}</div>`).join('');
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
@@ -757,7 +761,26 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   if(!isSnow && !isRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8) tipMsg += ' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!';
   document.getElementById('fairyTip').textContent = tipMsg;
 
+  state.notis = generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces);
+  renderNotis();
+
+  document.getElementById('productSectionTitle').textContent = '실제 코디템 추천';
+  document.querySelectorAll('#outfitItems .item-tag').forEach(t=>t.classList.remove('picked'));
   fetchAndRenderProducts(pieces.slice(0,2), {feel, isRain, isSnow, style:state.style});
+}
+function showProductsForItem(itemName, el){
+  document.querySelectorAll('#outfitItems .item-tag').forEach(t=>t.classList.remove('picked'));
+  if(el) el.classList.add('picked');
+  document.getElementById('productSectionTitle').textContent = `'${itemName}' 관련 코디템`;
+  const w = state.lastWeather;
+  const weatherCtx = w ? {
+    feel: w.feel,
+    isRain: RAIN_CODES.has(w.wcode) || w.rainProb>=50,
+    isSnow: SNOW_CODES.has(w.wcode),
+    style: state.style
+  } : {style: state.style};
+  fetchAndRenderProducts([itemName], weatherCtx);
+  document.getElementById('productSection').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 /* =============== 실제 코디템 추천 (네이버 쇼핑 검색) =============== */
@@ -974,8 +997,43 @@ async function addLocation(){
 
 /* =============== SETTINGS: TOGGLES =============== */
 /* =============== NOTIFICATIONS =============== */
+function formatNowTime(){
+  const now = new Date();
+  const h24 = now.getHours();
+  const ampm = h24<12 ? '오전' : '오후';
+  let h12 = h24 % 12; if(h12===0) h12 = 12;
+  const m = String(now.getMinutes()).padStart(2,'0');
+  return `${ampm} ${h12}:${m}`;
+}
+// 실제 날씨/코디 계산 결과를 바탕으로 상황에 맞는 알림 목록을 만듦 (하드코딩된 문구 없음)
+function generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces){
+  const time = formatNowTime();
+  const notis = [];
+  if(isSnow){
+    notis.push({emoji:'❄️', text:'눈 소식이 있어! 미끄러지지 않는 신발 신고 조심히 다녀와~', time});
+  } else if(rainProb>=60){
+    notis.push({emoji:'☔', text:'비 올 확률이 높아. 우산 챙기는 거 잊지 마!', time});
+  }
+  if(windSpeed>=WIND_STRONG){
+    notis.push({emoji:'💨', text:'바람이 꽤 강하게 불어. 바람막이 하나 걸치고 나가!', time});
+  }
+  if(feel>=33){
+    notis.push({emoji:'🥵', text:'푹푹 찌는 더위야! 수분 챙기고 그늘 위주로 다녀~', time});
+  } else if(feel<=-10){
+    notis.push({emoji:'🥶', text:'한파 수준으로 추워! 패딩·목도리는 필수로 챙겨입어', time});
+  }
+  if(!isSnow && !isRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8){
+    notis.push({emoji:'🌡️', text:'오늘은 기온차가 있는 편이니 얇은 겉옷을 챙겨가는 걸 추천해!', time});
+  }
+  notis.push({emoji:'👕', text:`오늘 추천 코디가 도착했어! ${pieces[0]} 위주로 준비해봐`, time});
+  return notis;
+}
 function renderNotis(){
   const wrap = document.getElementById('notiList');
+  if(!state.notis || !state.notis.length){
+    wrap.innerHTML = `<div class="empty-box">🔕<br>받은 알림이 없어요!</div>`;
+    return;
+  }
   wrap.innerHTML = state.notis.map(n=>`
     <div class="noti-item">
       <div class="noti-emoji">${n.emoji}</div>
@@ -985,6 +1043,12 @@ function renderNotis(){
       </div>
     </div>`).join('');
 }
+
+document.getElementById('outfitItems').addEventListener('click', (e)=>{
+  const tag = e.target.closest('.item-tag');
+  if(!tag) return;
+  showProductsForItem(tag.dataset.item, tag);
+});
 
 /* =============== INIT: 저장된 설정 있으면 온보딩 건너뛰기 =============== */
 function init(){

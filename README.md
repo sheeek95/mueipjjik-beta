@@ -12,18 +12,19 @@ lib/youtube.js              YouTube Data API 헬퍼 (트렌드 검색 + 캐싱)
 lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
 ```
 
-## 배포: Cloudflare Pages 전용
-이 프로젝트는 **Cloudflare Pages**에만 배포할 수 있어요. `functions/api/chat.js`가 Cloudflare Pages Functions 런타임에서만 동작하기 때문에, GitHub Pages 같은 순수 정적 호스팅에 올리면 AI 채팅(핏치 코디 상담)이 동작하지 않아요. (과거에 있던 GitHub Pages용 `static.yml` 워크플로우가 삭제된 것도 이 이유예요.)
+## 배포: Cloudflare(Workers, Git 연동) 전용
+이 프로젝트는 **Cloudflare**에만 배포할 수 있어요. `functions/api/chat.js` 등이 Cloudflare의 서버리스 런타임에서만 동작하기 때문에, GitHub Pages 같은 순수 정적 호스팅에 올리면 AI 채팅(핏치 코디 상담)이 동작하지 않아요.
 
-AI 채팅은 **Cloudflare Workers AI**로 동작해요. 별도 API 키 발급이나 카드 등록 없이, Cloudflare 계정에 기본 포함된 무료 뉴런 할당량(하루 10,000 뉴런) 안에서 바로 쓸 수 있어요.
+Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 `npx wrangler deploy`가 자동 지정되는데, 이건 저장소 루트의 **`wrangler.jsonc`** 설정을 읽어서 배포해요. 그래서 이 저장소엔 `wrangler.jsonc`(설정)와 `worker.js`(진입점 — `/api/chat`, `/api/products`는 `functions/api/*.js`로 라우팅하고 나머지는 정적 파일로 서빙)가 포함돼 있어요. 대시보드에서 "AI" 바인딩을 따로 추가할 필요 없이 `wrangler.jsonc`의 `ai` 설정만으로 Workers AI가 동작해요.
 
 배포 절차:
-1. Cloudflare 대시보드 > Pages > 이 저장소 연결 (빌드 설정 없이 정적 파일 그대로 배포)
-2. **Settings > Functions > Bindings > Add binding**에서 타입 `AI`, 변수 이름 `AI`로 바인딩 추가 (키 발급 불필요)
-3. (선택) 남용 방지를 위해 **Settings > Functions > KV namespace bindings**에서 `RATE_LIMIT_KV`라는 이름으로 KV 네임스페이스 연결 → IP당 하루 요청 횟수 제한이 자동으로 켜져요
-   - KV 네임스페이스가 아직 없다면: 대시보드 **Storage & Databases > KV > Create namespace**로 먼저 만든 뒤, 위 바인딩 화면에서 변수 이름 `RATE_LIMIT_KV`로 방금 만든 네임스페이스를 선택하면 돼요.
-4. (선택) 날씨/계절에 맞는 코디 트렌드를 핏치 답변에 반영하려면 **Settings > Environment variables**에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `YOUTUBE_API_KEY` 추가 (아래 "코디 트렌드 & 실제 상품 추천" 항목 참고)
-5. 배포 후 `/api/chat` 경로로 POST 요청이 정상 응답하는지 확인
+1. Cloudflare 대시보드에서 이 저장소를 Git으로 연결 (Build command 비워둠 → 자동으로 `npx wrangler deploy` 사용)
+2. **분기 제어**에서 프로덕션 분기를 `main`으로 지정 (필요하면 "프로덕션 이외 분기에 대한 빌드"도 켜서 다른 브랜치를 미리보기로 확인 가능)
+3. (선택) 남용 방지를 위해 **설정 > 변수 및 비밀**에서 KV 네임스페이스를 만들고(대시보드 **스토리지 및 데이터베이스 > KV > Create namespace**) `RATE_LIMIT_KV`라는 이름으로 바인딩 → IP당 하루 요청 횟수 제한이 자동으로 켜져요
+4. (선택) 날씨/계절에 맞는 코디 트렌드를 핏치 답변에 반영하려면 **설정 > 변수 및 비밀**에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `YOUTUBE_API_KEY` 추가 (아래 "코디 트렌드 & 실제 상품 추천" 항목 참고)
+5. 배포 후 `/api/chat` 경로로 POST 요청이 정상 응답하는지 확인 (브라우저 개발자 도구 > Network 탭에서 `chat` 요청의 Response 확인)
+
+⚠️ **Workers AI 모델은 예고 없이 지원 종료(deprecated)될 수 있어요.** 실제로 이 프로젝트도 배포 초기에 썼던 모델이 지원 종료되면서 AI채팅이 500 에러로 막힌 적이 있어요. 채팅이 갑자기 안 되면: 브라우저 개발자 도구(F12) > Network 탭 > `chat` 요청 클릭 > Response 탭에서 에러 메시지를 확인해보세요. `AiError ... was deprecated`처럼 나오면 `functions/api/chat.js`의 `TEXT_MODEL`(또는 `VISION_MODEL`) 값을 최신 모델 ID로 바꿔야 해요.
 
 ⚠️ 하루 10,000 뉴런은 **Cloudflare 계정 전체가 공유하는 무료 한도**예요 (대화 1건당 대략 수백 뉴런 소모). 사용자가 많아지면 하루 중간에 한도가 소진될 수 있으니, 이 경우 Workers AI 사용량 기반 유료 전환을 고려해야 해요.
 
@@ -54,4 +55,7 @@ AI 채팅은 **Cloudflare Workers AI**로 동작해요. 별도 API 키 발급이
 - 설정 탭에서 위치를 추가하면 목록에서 눌러 활성 위치를 바로 전환할 수 있고, ✕ 버튼으로 삭제할 수 있어요.
 - 설정 탭 "내 정보"에서 온보딩 때 입력한 성별/키를 나중에 다시 확인하고 바꿀 수 있어요.
 - 얼굴/옷 사진은 서버에 저장하지 않고 그 요청 처리에만 사용돼요. 베타 화면에도 이 안내 문구를 넣는 걸 추천해요.
-- 성별/키/스타일/위치 설정은 브라우저 `localStorage`에 저장돼서, 사용자가 직접 캐시나 사이트 데이터를 지우지 않는 한 새로고침해도 유지돼요 (DB 없이 클라이언트에만 저장하는 구조라, 다른 기기·브라우저에서는 안 보여요). 채팅 기록/알림 목록은 여전히 새로고침하면 초기화돼요.
+- 성별/키/스타일/위치 설정은 브라우저 `localStorage`에 저장돼서, 사용자가 직접 캐시나 사이트 데이터를 지우지 않는 한 새로고침해도 유지돼요 (DB 없이 클라이언트에만 저장하는 구조라, 다른 기기·브라우저에서는 안 보여요). 채팅 기록은 여전히 새로고침하면 초기화돼요.
+- 옷차림 추천 태그(니트, 청바지 등)를 클릭하면 그 아이템 하나로 상품 추천이 다시 조회돼요.
+- 알림 탭은 하드코딩된 문구가 아니라, 매번 날씨를 불러올 때 실제 조건(비/눈/강풍/기온차/폭염/한파)에 맞춰 다시 만들어져요. 해당 없는 조건은 안 뜨고, "오늘 추천 코디가 도착했어!"는 날씨를 불러올 때마다 항상 포함돼요. 아직 날씨를 못 불러왔거나 알림이 하나도 없으면 "받은 알림이 없어요!" 화면이 떠요.
+- 홈 화면에 아이콘을 추가하면(iOS/Android "홈 화면에 추가") 앱 이름이 "뭐입찍", 아이콘이 핏치(햄스터) 캐릭터로 표시돼요 (`manifest.json`, `icons/`).
