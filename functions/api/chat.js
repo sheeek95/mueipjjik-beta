@@ -23,7 +23,10 @@ import { searchYoutubeTrend } from '../../lib/youtube.js';
 const SYSTEM_PROMPT =
   "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 사용자의 옷차림/사진을 보고 " +
   "스타일리스트처럼 객관적인 피드백(색조합, 체형에 맞는 핏, 개선점, 추천 아이템)을 주되, " +
-  "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써.";
+  "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써. " +
+  "아주 중요한 규칙: 반드시 자연스럽게 이어지는 한국어 구어체 문장으로만 답하고, " +
+  "영어 단어나 한자를 절대 섞지 마 (예: dominated, Size, 色 같은 표현 금지 — '지배적이야', '오버사이즈', '연두색'처럼 순우리말/한글로 풀어서 써). " +
+  "별표(*), 마크다운 기호, 번호 매기기 같은 건 쓰지 말고, 그냥 대화하듯 문장을 이어서 말해.";
 
 // llama-3.1-8b-instruct는 2026-05-30부로 지원 종료돼서 llama-3.2-3b-instruct로 교체함.
 // vision 모델과 같은 Llama 계열이라 응답 형식(result.response)이 동일할 가능성이 높아 이걸로 선택함
@@ -78,6 +81,7 @@ export async function onRequestPost(context) {
         image: Array.from(bytes),
         prompt: `${systemPrompt}\n\n사용자: ${userText}`,
         max_tokens: MAX_TOKENS,
+        temperature: 0.4,
       });
       reply = result && result.response;
       if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
@@ -88,6 +92,7 @@ export async function onRequestPost(context) {
           { role: 'user', content: userText },
         ],
         max_tokens: MAX_TOKENS,
+        temperature: 0.4,
       });
       reply = result && result.response;
       if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
