@@ -1,19 +1,28 @@
 // Cloudflare Pages Function
 // 배포 경로: /api/chat  (파일 위치가 곧 라우트가 됨)
-// 이 파일 안에서만 ANTHROPIC_API_KEY를 사용해서 브라우저에는 절대 키가 노출되지 않음.
+//
+// 채팅 백엔드로 Cloudflare Workers AI(무료 티어)를 사용함.
+// 별도 API 키/결제수단 없이 Cloudflare 계정의 하루 무료 뉴런 할당량(기본 10,000 뉴런/일) 안에서 동작함.
 //
 // 설정 방법 (Cloudflare Pages 대시보드):
-//   Settings > Environment variables > ANTHROPIC_API_KEY 값 추가 (Production/Preview 둘 다)
+//   Settings > Functions > Bindings > Add binding
+//     Type: AI
+//     Variable name: AI
+//   (API 키 발급이나 환경변수 설정 필요 없음)
 // 선택 사항 (있으면 자동으로 사용됨, 없어도 동작함):
 //   Settings > Functions > KV namespace bindings 에서 RATE_LIMIT_KV 라는 이름으로 KV 네임스페이스 연결
-//   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (익명 서비스라 남용 방지에 필요)
+//   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (한 사람이 하루 무료 뉴런 할당량을 다 쓰는 것 방지)
 
 const SYSTEM_PROMPT =
   "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 사용자의 옷차림/사진을 보고 " +
   "스타일리스트처럼 객관적인 피드백(색조합, 체형에 맞는 핏, 개선점, 추천 아이템)을 주되, " +
   "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써.";
 
-const DAILY_LIMIT_PER_IP = 20; // 익명 서비스라 IP당 하루 요청 한도를 둠 (필요시 조정)
+const TEXT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
+const MAX_TOKENS = 512;
+
+const DAILY_LIMIT_PER_IP = 20; // 무료 뉴런 할당량을 나눠 쓰기 위한 IP별 하루 요청 한도 (필요시 조정)
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -43,32 +52,42 @@ export async function onRequestPost(context) {
       await env.RATE_LIMIT_KV.put(todayKey, String(current + 1), { expirationTtl: 60 * 60 * 24 });
     }
 
-    if (!env.ANTHROPIC_API_KEY) {
-      return jsonResponse({ error: '서버에 API 키가 설정되지 않았어요. Cloudflare Pages 환경변수를 확인해줘.' }, 500);
+    if (!env.AI) {
+      return jsonResponse({ error: 'AI 바인딩이 설정되지 않았어요. Cloudflare Pages > Settings > Functions > Bindings에서 AI를 연결해줘.' }, 500);
     }
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userContent }],
-      }),
-    });
+    const textBlock = Array.isArray(userContent) ? userContent.find((b) => b.type === 'text') : null;
+    const imageBlock = Array.isArray(userContent) ? userContent.find((b) => b.type === 'image') : null;
+    const userText = (textBlock && textBlock.text) || '이 코디 어때? 색조합이랑 핏 좀 봐줘.';
 
-    const data = await anthropicRes.json();
+    let reply;
+    if (imageBlock) {
+      // llama-3.2-11b-vision-instruct는 messages가 아니라 image(byte 배열) + prompt(문자열) 형식을 받음
+      const binary = atob(imageBlock.source.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    if (!anthropicRes.ok) {
-      return jsonResponse({ error: (data.error && data.error.message) || 'AI 응답을 가져오지 못했어요.' }, anthropicRes.status);
+      const result = await env.AI.run(VISION_MODEL, {
+        image: Array.from(bytes),
+        prompt: `${SYSTEM_PROMPT}\n\n사용자: ${userText}`,
+        max_tokens: MAX_TOKENS,
+      });
+      reply = result && result.response;
+    } else {
+      const result = await env.AI.run(TEXT_MODEL, {
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userText },
+        ],
+        max_tokens: MAX_TOKENS,
+      });
+      reply = result && result.response;
     }
 
-    const reply = (data.content || []).map((b) => b.text || '').join('\n');
+    if (!reply) {
+      return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.' }, 500);
+    }
+
     return jsonResponse({ reply });
   } catch (err) {
     return jsonResponse({ error: '서버 오류가 발생했어요.' }, 500);

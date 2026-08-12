@@ -585,9 +585,9 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   document.getElementById('fairyTip').textContent = tipMsg;
 }
 
-/* =============== CLAUDE API HELPER =============== */
-async function callClaude(userContent){
-  // API 키는 브라우저에 없음. /api/chat (Cloudflare Pages Function)이 서버에서만 키를 사용해 Claude API를 호출함.
+/* =============== AI 채팅 API HELPER =============== */
+async function callFitchAI(userContent){
+  // /api/chat (Cloudflare Pages Function)이 서버에서 Cloudflare Workers AI를 호출함. 브라우저에는 키가 없음.
   const res = await fetch('/api/chat', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -645,7 +645,7 @@ async function sendChat(){
       const mime = img.substring(5, img.indexOf(';'));
       content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
     }
-    const reply = await callClaude(content);
+    const reply = await callFitchAI(content);
     loadingRow.remove();
     addBotMsg(reply);
   }catch(err){

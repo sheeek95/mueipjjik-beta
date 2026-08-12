@@ -5,19 +5,21 @@
 ## 폴더 구조
 ```
 index.html              프론트엔드 전체 (온보딩/홈/AI채팅/설정/알림)
-functions/api/chat.js   Claude API 프록시 (Cloudflare Pages Function)
+functions/api/chat.js   AI 채팅 프록시 (Cloudflare Pages Function, Cloudflare Workers AI 무료 티어 사용)
 ```
 
 ## 배포: Cloudflare Pages 전용
 이 프로젝트는 **Cloudflare Pages**에만 배포할 수 있어요. `functions/api/chat.js`가 Cloudflare Pages Functions 런타임에서만 동작하기 때문에, GitHub Pages 같은 순수 정적 호스팅에 올리면 AI 채팅(핏치 코디 상담)이 동작하지 않아요. (과거에 있던 GitHub Pages용 `static.yml` 워크플로우가 삭제된 것도 이 이유예요.)
 
+AI 채팅은 **Cloudflare Workers AI**로 동작해요. 별도 API 키 발급이나 카드 등록 없이, Cloudflare 계정에 기본 포함된 무료 뉴런 할당량(하루 10,000 뉴런) 안에서 바로 쓸 수 있어요.
+
 배포 절차:
 1. Cloudflare 대시보드 > Pages > 이 저장소 연결 (빌드 설정 없이 정적 파일 그대로 배포)
-2. **Settings > Environment variables**에 `ANTHROPIC_API_KEY` 추가 (Production/Preview 둘 다)
+2. **Settings > Functions > Bindings > Add binding**에서 타입 `AI`, 변수 이름 `AI`로 바인딩 추가 (키 발급 불필요)
 3. (선택) 남용 방지를 위해 **Settings > Functions > KV namespace bindings**에서 `RATE_LIMIT_KV`라는 이름으로 KV 네임스페이스 연결 → IP당 하루 요청 횟수 제한이 자동으로 켜져요
 4. 배포 후 `/api/chat` 경로로 POST 요청이 정상 응답하는지 확인
 
-⚠️ `functions/api/chat.js`가 호출하는 모델 ID(`claude-sonnet-4-6`)가 현재 사용 가능한 값인지 배포 전에 꼭 확인해주세요. 잘못된 모델 ID면 AI 채팅 탭 전체가 502/500 오류로 막혀요.
+⚠️ 하루 10,000 뉴런은 **Cloudflare 계정 전체가 공유하는 무료 한도**예요 (대화 1건당 대략 수백 뉴런 소모). 사용자가 많아지면 하루 중간에 한도가 소진될 수 있으니, 이 경우 Workers AI 사용량 기반 유료 전환을 고려해야 해요.
 
 ## 참고
 - 날씨(Open-Meteo), 위치 지오코딩(Open-Meteo Geocoding), 역지오코딩(BigDataCloud) API는 모두 키가 필요 없어서 브라우저에서 바로 호출돼요.
