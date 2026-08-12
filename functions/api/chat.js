@@ -12,6 +12,8 @@
 // 선택 사항 (있으면 자동으로 사용됨, 없어도 동작함):
 //   Settings > Functions > KV namespace bindings 에서 RATE_LIMIT_KV 라는 이름으로 KV 네임스페이스 연결
 //   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (한 사람이 하루 무료 뉴런 할당량을 다 쓰는 것 방지)
+//   Settings > Environment variables 에서 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 추가 (developers.naver.com, 무료)
+//   -> 연결하면 오늘 날씨/계절에 맞는 네이버 블로그 코디 글을 검색해 핏치 답변에 트렌드로 녹여줌
 
 const SYSTEM_PROMPT =
   "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 사용자의 옷차림/사진을 보고 " +
@@ -60,6 +62,9 @@ export async function onRequestPost(context) {
     const imageBlock = Array.isArray(userContent) ? userContent.find((b) => b.type === 'image') : null;
     const userText = (textBlock && textBlock.text) || '이 코디 어때? 색조합이랑 핏 좀 봐줘.';
 
+    const trendContext = await fetchTrendContext(env, body && body.weather);
+    const systemPrompt = SYSTEM_PROMPT + trendContext;
+
     let reply;
     if (imageBlock) {
       // llama-3.2-11b-vision-instruct는 messages가 아니라 image(byte 배열) + prompt(문자열) 형식을 받음
@@ -69,14 +74,14 @@ export async function onRequestPost(context) {
 
       const result = await env.AI.run(VISION_MODEL, {
         image: Array.from(bytes),
-        prompt: `${SYSTEM_PROMPT}\n\n사용자: ${userText}`,
+        prompt: `${systemPrompt}\n\n사용자: ${userText}`,
         max_tokens: MAX_TOKENS,
       });
       reply = result && result.response;
     } else {
       const result = await env.AI.run(TEXT_MODEL, {
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userText },
         ],
         max_tokens: MAX_TOKENS,
@@ -91,6 +96,57 @@ export async function onRequestPost(context) {
     return jsonResponse({ reply });
   } catch (err) {
     return jsonResponse({ error: '서버 오류가 발생했어요.' }, 500);
+  }
+}
+
+// ---- 날씨/계절에 맞는 네이버 블로그 코디 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
+function currentSeasonKST() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const month = kst.getUTCMonth() + 1;
+  if (month === 12 || month <= 2) return '겨울';
+  if (month <= 5) return '봄';
+  if (month <= 8) return '여름';
+  return '가을';
+}
+
+function stripNaverMarkup(s) {
+  return String(s)
+    .replace(/<\/?b>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'");
+}
+
+async function fetchTrendContext(env, weather) {
+  if (!env.NAVER_CLIENT_ID || !env.NAVER_CLIENT_SECRET) return '';
+
+  const parts = [currentSeasonKST()];
+  if (weather && typeof weather.feel === 'number') parts.push(`${Math.round(weather.feel)}도`);
+  if (weather && weather.isSnow) parts.push('눈 오는 날');
+  else if (weather && weather.isRain) parts.push('비 오는 날');
+  if (weather && weather.style) parts.push(weather.style);
+  parts.push('코디');
+  const query = parts.join(' ');
+
+  try {
+    const url = `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=3&sort=sim`;
+    const res = await fetch(url, {
+      headers: {
+        'X-Naver-Client-Id': env.NAVER_CLIENT_ID,
+        'X-Naver-Client-Secret': env.NAVER_CLIENT_SECRET,
+      },
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const items = (data.items || []).slice(0, 3);
+    if (!items.length) return '';
+
+    const lines = items.map((it, i) => `${i + 1}. ${stripNaverMarkup(it.title)} - ${stripNaverMarkup(it.description)}`);
+    return `\n\n[참고 자료: '${query}' 네이버 블로그 검색 결과]\n${lines.join('\n')}\n위 내용을 참고해서 요즘 트렌드를 자연스럽게 답변에 녹여줘. 블로그 제목이나 링크를 그대로 나열하지는 말고, 어울리는 내용만 골라서 네 스타일로 이야기해줘.`;
+  } catch (e) {
+    return '';
   }
 }
 

@@ -586,16 +586,28 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
 }
 
 /* =============== AI 채팅 API HELPER =============== */
-async function callFitchAI(userContent){
+async function callFitchAI(userContent, weatherCtx){
   // /api/chat (Cloudflare Pages Function)이 서버에서 Cloudflare Workers AI를 호출함. 브라우저에는 키가 없음.
+  // weatherCtx를 같이 보내면 서버가 날씨/계절에 맞는 네이버 블로그 코디 트렌드를 검색해 답변에 참고함.
   const res = await fetch('/api/chat', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ content: userContent })
+    body: JSON.stringify({ content: userContent, weather: weatherCtx })
   });
   const data = await res.json();
   if(!res.ok) throw new Error(data.error || 'API 오류');
   return data.reply;
+}
+function currentWeatherCtx(){
+  if(!state.lastWeather) return null;
+  const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
+  return {
+    feel,
+    isRain: RAIN_CODES.has(wcode) || rainProb>=50,
+    isSnow: SNOW_CODES.has(wcode),
+    windSpeed,
+    style: state.style
+  };
 }
 
 /* =============== CHAT: COORDI TAB =============== */
@@ -645,7 +657,7 @@ async function sendChat(){
       const mime = img.substring(5, img.indexOf(';'));
       content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
     }
-    const reply = await callFitchAI(content);
+    const reply = await callFitchAI(content, currentWeatherCtx());
     loadingRow.remove();
     addBotMsg(reply);
   }catch(err){
