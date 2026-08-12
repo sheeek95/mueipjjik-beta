@@ -1,0 +1,16 @@
+{
+  // Cloudflare가 "npx wrangler deploy"를 실행할 때 읽는 설정 파일.
+  // 이 파일이 없으면 배포 명령이 아무것도 배포할 게 없어서 빈 사이트만 뜸.
+  "name": "mueipjjik-beta",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-12",
+  "assets": {
+    // 저장소 루트를 정적 파일(index.html 등)로 서빙
+    "directory": ".",
+    "binding": "ASSETS"
+  },
+  "ai": {
+    // Workers AI 바인딩. 대시보드에서 따로 추가 안 해도 이 설정만으로 동작함.
+    "binding": "AI"
+  }
+}
