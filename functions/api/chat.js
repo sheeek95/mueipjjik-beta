@@ -25,9 +25,10 @@ const SYSTEM_PROMPT =
   "스타일리스트처럼 객관적인 피드백(색조합, 체형에 맞는 핏, 개선점, 추천 아이템)을 주되, " +
   "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써.";
 
-// llama-3.1-8b-instruct는 2026-05-30부로 지원 종료돼서 gemma-4-26b-a4b-it(MoE, 4B 활성 파라미터,
-// 다국어 지원 우수)로 교체함. 이미지 채팅은 별도 검증된 vision 모델을 그대로 사용.
-const TEXT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
+// llama-3.1-8b-instruct는 2026-05-30부로 지원 종료돼서 llama-3.2-3b-instruct로 교체함.
+// vision 모델과 같은 Llama 계열이라 응답 형식(result.response)이 동일할 가능성이 높아 이걸로 선택함
+// (gemma-4-26b-a4b-it로 한 번 교체해봤는데 result.response가 비어 있어서 롤백함).
+const TEXT_MODEL = '@cf/meta/llama-3.2-3b-instruct';
 const VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 const MAX_TOKENS = 512;
 
@@ -79,6 +80,7 @@ export async function onRequestPost(context) {
         max_tokens: MAX_TOKENS,
       });
       reply = result && result.response;
+      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
     } else {
       const result = await env.AI.run(TEXT_MODEL, {
         messages: [
@@ -88,15 +90,20 @@ export async function onRequestPost(context) {
         max_tokens: MAX_TOKENS,
       });
       reply = result && result.response;
-    }
-
-    if (!reply) {
-      return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.' }, 500);
+      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
     }
 
     return jsonResponse({ reply });
   } catch (err) {
-    return jsonResponse({ error: '서버 오류가 발생했어요.' }, 500);
+    return jsonResponse({ error: '서버 오류가 발생했어요.', debug: String((err && err.stack) || err) }, 500);
+  }
+}
+
+function safeStringify(obj) {
+  try {
+    return JSON.stringify(obj);
+  } catch (e) {
+    return String(obj);
   }
 }
 
