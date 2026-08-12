@@ -94,7 +94,8 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ reply });
   } catch (err) {
-    return jsonResponse({ error: '서버 오류가 발생했어요.' }, 500);
+    // TODO(디버그용, 원인 확인 후 제거): 실제 에러 메시지를 그대로 응답에 노출
+    return jsonResponse({ error: '서버 오류가 발생했어요.', debug: String(err && err.stack || err) }, 500);
   }
 }
 
