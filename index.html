@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>뭐입찍?</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -22,19 +22,22 @@
     --danger:#E36B6B;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html, body{ height:100%; }
   body{
     margin:0; background:#EDE3D6; font-family:'Gowun Dodum',sans-serif; color:var(--ink);
-    display:flex; justify-content:center; min-height:100vh;
+    display:flex; justify-content:center;
+    height:100vh; height:100dvh;
   }
   .display{font-family:'Jua',sans-serif;}
   #frame{
-    width:100%; max-width:420px; min-height:100vh; background:var(--bg); position:relative;
+    width:100%; max-width:420px; height:100vh; height:100dvh; background:var(--bg); position:relative;
     display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 40px rgba(0,0,0,0.08);
   }
-  .screen{ display:none; flex:1; flex-direction:column; padding-bottom:84px; }
+  /* 화면마다 내용이 넘치면 topbar/bottomnav는 고정되고 이 영역만 내부 스크롤됨 (기기 실제 화면 높이에 자동으로 맞춰짐) */
+  .screen{ display:none; flex:1; flex-direction:column; padding-bottom:84px; overflow-y:auto; min-height:0; }
   .screen.active{ display:flex; }
   /* ---------- top bar ---------- */
-  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:18px 20px 8px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:max(18px, calc(env(safe-area-inset-top) + 10px)) 20px 8px; flex-shrink:0; }
   .topbar h1{ font-size:20px; margin:0; }
   .icon-btn{ background:none; border:none; font-size:20px; cursor:pointer; padding:6px; border-radius:50%; }
   .icon-btn:active{ background:var(--line); }
@@ -182,7 +185,8 @@
   /* ---------- bottom nav ---------- */
   #bottomnav{
     position:absolute; bottom:0; left:0; right:0; background:var(--card); display:none;
-    justify-content:space-around; padding:10px 0 14px; border-top:1px solid var(--line);
+    justify-content:space-around; padding-top:10px; padding-bottom:max(14px, env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);
   }
   #bottomnav.show{ display:flex; }
   .nav-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--ink-soft); cursor:pointer; }
@@ -612,16 +616,19 @@ async function fetchWeather(){
 }
 
 /* =============== OUTFIT RECOMMENDATION =============== */
+// 기온대별 라벨. 실제 상/하의 조합은 STYLE_OUTFITS에서 (기온대 x 스타일)로 따로 정함
 const TIERS = [
-  {min:28, label:'28℃ 이상', items:['민소매','반팔','반바지','원피스']},
-  {min:23, label:'23~27℃', items:['반팔','얇은 셔츠','반바지','면바지']},
-  {min:20, label:'20~22℃', items:['얇은 가디건','긴팔','면바지','청바지']},
-  {min:17, label:'17~19℃', items:['얇은 니트','맨투맨','가디건','청바지']},
-  {min:12, label:'12~16℃', items:['자켓','가디건','스타킹','청바지','면바지']},
-  {min:9,  label:'9~11℃', items:['자켓','트렌치코트','니트','청바지','스타킹']},
-  {min:5,  label:'5~8℃', items:['코트','가죽자켓','히트텍','니트','레깅스']},
-  {min:-99,label:'4℃ 이하', items:['패딩','두꺼운 코트','목도리','기모제품']}
+  {min:28, label:'28℃ 이상'},
+  {min:23, label:'23~27℃'},
+  {min:20, label:'20~22℃'},
+  {min:17, label:'17~19℃'},
+  {min:12, label:'12~16℃'},
+  {min:9,  label:'9~11℃'},
+  {min:5,  label:'5~8℃'},
+  {min:-99,label:'4℃ 이하'}
 ];
+// 추운 기온대는 스타일과 무관하게 꼭 필요한 방한 아이템을 따로 표시
+const ACCESSORY_BY_TIER = ['','','','','','','','목도리'];
 const STYLES = ['캐주얼','로맨틱','미니멀','포멀','스트릿'];
 const STYLE_FLAVOR = {
   '캐주얼': {tip:'편하게 툭 걸치는 느낌으로! 스니커즈랑 매치하면 완벽해', extra:'스니커즈'},
@@ -630,6 +637,82 @@ const STYLE_FLAVOR = {
   '포멀':   {tip:'단정한 라인으로 각 잡힌 느낌을 살려봐', extra:'구두'},
   '스트릿': {tip:'오버핏 + 레이어드로 힘을 좀 줘볼까?', extra:'청키 스니커즈'}
 };
+// 기온대(TIERS 순서와 동일) x 스타일별 실제 상/하의 조합.
+// onepiece가 있으면 그 하나로, 없으면 top+bottom을 같이 입는 걸로 표시함 (둘을 동시에 다 입으라는 뜻이 아님)
+const STYLE_OUTFITS = [
+  { // 28℃ 이상
+    '캐주얼': {top:'루즈핏 반팔티', bottom:'와이드 반바지'},
+    '로맨틱': {onepiece:'하늘하늘 미니 원피스'},
+    '미니멀': {onepiece:'무지 리넨 원피스'},
+    '포멀':   {top:'카라 반팔 셔츠', bottom:'슬랙스 반바지'},
+    '스트릿': {top:'오버사이즈 그래픽 반팔', bottom:'카고 반바지'}
+  },
+  { // 23~27℃
+    '캐주얼': {top:'반팔 티셔츠', bottom:'데님 반바지'},
+    '로맨틱': {onepiece:'플로럴 원피스'},
+    '미니멀': {top:'무지 반팔티', bottom:'와이드 면바지'},
+    '포멀':   {top:'얇은 셔츠', bottom:'슬랙스'},
+    '스트릿': {top:'오버핏 반팔', bottom:'카고 팬츠'}
+  },
+  { // 20~22℃
+    '캐주얼': {top:'맨투맨', bottom:'청바지'},
+    '로맨틱': {top:'블라우스', bottom:'플리츠 스커트'},
+    '미니멀': {top:'니트 베스트+셔츠', bottom:'스트레이트 슬랙스'},
+    '포멀':   {top:'셔츠', bottom:'슬랙스'},
+    '스트릿': {top:'후드 집업', bottom:'와이드 데님'}
+  },
+  { // 17~19℃
+    '캐주얼': {top:'맨투맨+가디건', bottom:'청바지'},
+    '로맨틱': {top:'니트 가디건', bottom:'플리츠 스커트'},
+    '미니멀': {top:'얇은 니트', bottom:'스트레이트 슬랙스'},
+    '포멀':   {top:'니트+셔츠', bottom:'슬랙스'},
+    '스트릿': {top:'오버핏 후드티', bottom:'와이드 팬츠'}
+  },
+  { // 12~16℃
+    '캐주얼': {top:'맨투맨+데님 자켓', bottom:'청바지'},
+    '로맨틱': {top:'니트+트렌치코트', bottom:'롱스커트'},
+    '미니멀': {top:'니트+슬랙스 자켓', bottom:'스트레이트 슬랙스'},
+    '포멀':   {top:'니트+블레이저', bottom:'슬랙스'},
+    '스트릿': {top:'후드티+바시티 자켓', bottom:'카고 팬츠'}
+  },
+  { // 9~11℃
+    '캐주얼': {top:'니트+청자켓', bottom:'청바지'},
+    '로맨틱': {top:'니트+트렌치코트', bottom:'미디스커트+스타킹'},
+    '미니멀': {top:'터틀넥 니트', bottom:'슬랙스'},
+    '포멀':   {top:'니트+코트', bottom:'슬랙스'},
+    '스트릿': {top:'맨투맨+블루종', bottom:'와이드 팬츠'}
+  },
+  { // 5~8℃
+    '캐주얼': {top:'니트+울코트', bottom:'청바지'},
+    '로맨틱': {top:'니트+울코트', bottom:'미디스커트+스타킹'},
+    '미니멀': {top:'터틀넥+롱코트', bottom:'슬랙스'},
+    '포멀':   {top:'니트+울코트', bottom:'슬랙스'},
+    '스트릿': {top:'후드티+가죽자켓', bottom:'와이드 팬츠'}
+  },
+  { // 4℃ 이하
+    '캐주얼': {top:'기모 맨투맨+숏패딩', bottom:'기모 청바지'},
+    '로맨틱': {top:'니트+롱패딩', bottom:'기모 레깅스'},
+    '미니멀': {top:'터틀넥+무채색 롱패딩', bottom:'기모 슬랙스'},
+    '포멀':   {top:'니트+울코트', bottom:'기모 슬랙스'},
+    '스트릿': {top:'후드티+숏패딩', bottom:'조거팬츠'}
+  }
+];
+function outfitTierIndex(feel){
+  for(let i=0;i<TIERS.length;i++){ if(feel>=TIERS[i].min) return i; }
+  return TIERS.length-1;
+}
+function getOutfitPieces(feel, style){
+  const idx = outfitTierIndex(feel);
+  const outfit = (STYLE_OUTFITS[idx] && STYLE_OUTFITS[idx][style]) || STYLE_OUTFITS[idx]['캐주얼'];
+  const pieces = [];
+  if(outfit.onepiece){
+    outfit.onepiece.split('+').forEach(p=>pieces.push(p));
+  } else {
+    if(outfit.top) outfit.top.split('+').forEach(p=>pieces.push(p));
+    if(outfit.bottom) outfit.bottom.split('+').forEach(p=>pieces.push(p));
+  }
+  return { idx, tier:TIERS[idx], pieces };
+}
 function renderStyleChips(){
   const wrap = document.getElementById('styleScroll');
   wrap.innerHTML = STYLES.map(s=>`<div class="style-chip ${s===state.style?'selected':''}" onclick="selectStyle('${s}')">${s}</div>`).join('');
@@ -648,7 +731,7 @@ function selectStyle(s){
 const WIND_STRONG = 30; // km/h 이상이면 강풍으로 안내
 const WIND_BREEZY = 15; // km/h 이상이면 선선한 바람으로 안내
 function renderOutfit(feel, rainProb, windSpeed, wcode){
-  const tier = TIERS.find(t=>feel>=t.min) || TIERS[TIERS.length-1];
+  const {idx, tier, pieces} = getOutfitPieces(feel, state.style);
   const isSnow = SNOW_CODES.has(wcode);
   const isRain = RAIN_CODES.has(wcode) || rainProb>=50;
 
@@ -656,16 +739,17 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   const flavor = STYLE_FLAVOR[state.style];
 
   const extraTags = [flavor.extra];
+  if(ACCESSORY_BY_TIER[idx]) extraTags.unshift(ACCESSORY_BY_TIER[idx]);
   if(isSnow) extraTags.push('미끄럼 방지 신발', '방수 아우터');
   else if(isRain) extraTags.push('우산', '방수 신발');
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
   document.getElementById('outfitItems').innerHTML =
-    tier.items.map(i=>`<div class="item-tag">${i}</div>`).join('') +
+    pieces.map(i=>`<div class="item-tag">${i}</div>`).join('') +
     extraTags.map(i=>`<div class="extra-tag">+ ${i}</div>`).join('');
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
-  let tipMsg = `오늘 체감 ${feel}℃! ${tier.items[0]} 위주로 챙겨입어~`;
+  let tipMsg = `오늘 체감 ${feel}℃! ${pieces[0]} 위주로 챙겨입어~`;
   if(isSnow) tipMsg += ' 눈 소식이 있어서 미끄러지지 않는 신발 신는 게 좋겠어 ❄️';
   else if(rainProb>=60) tipMsg += ' 비 올 확률 높으니까 우산도 꼭 챙기고!';
   if(windSpeed>=WIND_STRONG) tipMsg += ' 바람이 꽤 강하게 부니까 체감온도가 더 낮을 수 있어, 바람막이 챙겨!';
@@ -673,7 +757,7 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   if(!isSnow && !isRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8) tipMsg += ' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!';
   document.getElementById('fairyTip').textContent = tipMsg;
 
-  fetchAndRenderProducts(tier.items.slice(0,2), {feel, isRain, isSnow, style:state.style});
+  fetchAndRenderProducts(pieces.slice(0,2), {feel, isRain, isSnow, style:state.style});
 }
 
 /* =============== 실제 코디템 추천 (네이버 쇼핑 검색) =============== */
@@ -733,14 +817,14 @@ async function callFitchAI(userContent, weatherCtx){
 function currentWeatherCtx(){
   if(!state.lastWeather) return null;
   const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
-  const tier = TIERS.find(t=>feel>=t.min) || TIERS[TIERS.length-1];
+  const {pieces} = getOutfitPieces(feel, state.style);
   return {
     feel,
     isRain: RAIN_CODES.has(wcode) || rainProb>=50,
     isSnow: SNOW_CODES.has(wcode),
     windSpeed,
     style: state.style,
-    items: tier.items.slice(0,2)
+    items: pieces.slice(0,2)
   };
 }
 
