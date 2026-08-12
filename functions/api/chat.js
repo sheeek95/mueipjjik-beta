@@ -14,8 +14,11 @@
 //   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (한 사람이 하루 무료 뉴런 할당량을 다 쓰는 것 방지)
 //   Settings > Environment variables 에서 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 추가 (developers.naver.com, 무료)
 //   -> 연결하면 오늘 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품을 검색해 핏치 답변에 참고자료로 녹여줌
+//   Settings > Environment variables 에서 YOUTUBE_API_KEY 추가 (Google Cloud Console, 무료, 카드 불필요)
+//   -> 연결하면 요즘 패션 유튜버들의 계절별 영상 제목/설명을 핏치 답변 참고자료로 녹여줌 (영상 자체는 화면에 노출 안 함)
 
 import { weatherQueryParts, searchNaverBlog, searchNaverShop, stripNaverMarkup, checkRateLimit, jsonResponse } from '../../lib/naver.js';
+import { searchYoutubeTrend } from '../../lib/youtube.js';
 
 const SYSTEM_PROMPT =
   "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 사용자의 옷차림/사진을 보고 " +
@@ -95,26 +98,31 @@ export async function onRequestPost(context) {
   }
 }
 
-// ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품을 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
+// ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품 + 유튜브 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
 async function fetchTrendContext(env, weather) {
-  if (!env.NAVER_CLIENT_ID || !env.NAVER_CLIENT_SECRET) return '';
+  const hasNaver = !!(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET);
+  const hasYoutube = !!env.YOUTUBE_API_KEY;
+  if (!hasNaver && !hasYoutube) return '';
 
   const baseParts = weatherQueryParts(weather);
   const blogQuery = [...baseParts, '코디'].join(' ');
-  const blogItems = await searchNaverBlog(env, blogQuery, 3);
+  const ytQuery = [...baseParts, '데일리룩'].join(' ');
+  const hasTopItem = weather && Array.isArray(weather.items) && weather.items.length > 0;
+  const shopQuery = hasTopItem ? [...baseParts, weather.items[0]].join(' ') : '';
 
-  let productLines = [];
-  if (weather && Array.isArray(weather.items) && weather.items.length) {
-    const shopQuery = [...baseParts, weather.items[0]].join(' '); // 대표 아이템 1개만 조회해 API 호출량 절약
-    const shopItems = await searchNaverShop(env, shopQuery, 2);
-    productLines = shopItems.map((p, i) => {
-      const price = Number(p.lprice);
-      const priceLabel = Number.isFinite(price) ? `${price.toLocaleString()}원` : '';
-      return `${i + 1}. ${stripNaverMarkup(p.title)} - ${priceLabel} (${p.mallName}) ${p.link}`;
-    });
-  }
+  const [blogItems, shopItems, ytItems] = await Promise.all([
+    hasNaver ? searchNaverBlog(env, blogQuery, 3) : Promise.resolve([]),
+    hasNaver && hasTopItem ? searchNaverShop(env, shopQuery, 2) : Promise.resolve([]), // 대표 아이템 1개만 조회해 API 호출량 절약
+    hasYoutube ? searchYoutubeTrend(env, ytQuery, 3) : Promise.resolve([]),
+  ]);
 
-  if (!blogItems.length && !productLines.length) return '';
+  const productLines = shopItems.map((p, i) => {
+    const price = Number(p.lprice);
+    const priceLabel = Number.isFinite(price) ? `${price.toLocaleString()}원` : '';
+    return `${i + 1}. ${stripNaverMarkup(p.title)} - ${priceLabel} (${p.mallName}) ${p.link}`;
+  });
+
+  if (!blogItems.length && !productLines.length && !ytItems.length) return '';
 
   let ctx = '';
   if (blogItems.length) {
@@ -124,6 +132,10 @@ async function fetchTrendContext(env, weather) {
   if (productLines.length) {
     ctx += `\n\n[참고 자료: 지금 날씨에 어울리는 실제 판매 상품]\n${productLines.join('\n')}\n상품을 추천할 땐 이 목록 중 어울리는 걸 골라 이름과 링크를 자연스럽게 언급해줘.`;
   }
-  ctx += '\n\n위 참고 자료를 답변에 자연스럽게 녹여줘. 블로그 글 제목을 그대로 나열하진 말고, 어울리는 내용만 골라 네 스타일로 이야기해줘.';
+  if (ytItems.length) {
+    const lines = ytItems.map((v, i) => `${i + 1}. [${v.channel}] ${v.title} - ${v.description.slice(0, 80)}`);
+    ctx += `\n\n[참고 자료: 요즘 패션 유튜버 영상 트렌드]\n${lines.join('\n')}\n영상 제목·채널명을 언급하거나 시청을 권하지 말고, 그 안에 담긴 스타일링 아이디어(색상 조합, 아이템, 레이어링 방식)만 골라 네 코디 조언에 자연스럽게 녹여줘.`;
+  }
+  ctx += '\n\n위 참고 자료를 답변에 자연스럽게 녹여줘. 글 제목이나 채널명을 그대로 나열하진 말고, 어울리는 내용만 골라 네 스타일로 이야기해줘.';
   return ctx;
 }
