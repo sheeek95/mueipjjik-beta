@@ -377,6 +377,12 @@
     <div class="topbar"><h1 class="display">설정</h1><div style="width:32px"></div></div>
     <div style="overflow-y:auto; flex:1;">
       <div class="set-section">
+        <div class="set-h">내 정보</div>
+        <div class="set-row" onclick="openModal('gender')"><span>성별</span><span style="display:flex; align-items:center; gap:6px;"><span id="genderValue" style="color:var(--ink-soft); font-size:13px;">선택 안 함</span><span class="arrow">›</span></span></div>
+        <div class="set-row" onclick="openModal('height')"><span>키</span><span style="display:flex; align-items:center; gap:6px;"><span id="heightValue" style="color:var(--ink-soft); font-size:13px;">설정 안 함</span><span class="arrow">›</span></span></div>
+      </div>
+
+      <div class="set-section">
         <div class="set-h">내 위치</div>
         <div id="locList"></div>
         <button class="add-loc-btn" onclick="openModal('addLoc')">+ 위치 추가하기</button>
@@ -425,6 +431,26 @@
     </div>
   </div>
 
+  <div class="modal-bg" id="modal-gender">
+    <div class="modal">
+      <h3>성별</h3>
+      <div class="chip-row" id="genderChipRow" style="margin-bottom:16px;">
+        <div class="chip" data-v="여성" onclick="pickSettingsGender(this)">여성</div>
+        <div class="chip" data-v="남성" onclick="pickSettingsGender(this)">남성</div>
+        <div class="chip" data-v="선택안함" onclick="pickSettingsGender(this)">선택 안 함</div>
+      </div>
+      <div class="modal-btns"><button class="btn-confirm" style="flex:none; width:100%;" onclick="closeModal('gender')">완료</button></div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="modal-height">
+    <div class="modal">
+      <h3>키</h3>
+      <input type="number" id="settingsHeightInput" placeholder="예: 165 (cm)">
+      <div class="modal-btns"><button class="btn-cancel" onclick="closeModal('height')">취소</button><button class="btn-confirm" onclick="saveSettingsHeight()">저장</button></div>
+    </div>
+  </div>
+
 
 </div>
 
@@ -446,6 +472,27 @@ const state = {
   fitImgs:{face:null, clothes:null}
 };
 
+/* =============== 로컬 저장 (새로고침해도 설정 유지) =============== */
+const STORAGE_KEY = 'mueipjjik_prefs_v1';
+function saveState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      onboarded:true,
+      gender: state.gender,
+      height: state.height,
+      style: state.style,
+      extraLocs: state.extraLocs,
+      activeIdx: state.activeIdx
+    }));
+  }catch(e){ /* 브라우저가 저장소를 막아둔 경우(시크릿 모드 등) 조용히 무시 */ }
+}
+function loadSavedState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
 /* =============== ONBOARDING =============== */
 function goStep(n){
   for(let i=0;i<=3;i++) document.getElementById('onb-step-'+i).style.display = 'none';
@@ -466,7 +513,29 @@ function finishOnboarding(){
   renderStyleChips();
   renderLocList();
   renderNotis();
+  renderMyInfo();
   seedChat();
+  saveState();
+}
+
+/* =============== SETTINGS: 내 정보 (성별/키) =============== */
+function renderMyInfo(){
+  document.getElementById('genderValue').textContent = (state.gender && state.gender !== '선택안함') ? state.gender : '선택 안 함';
+  document.getElementById('heightValue').textContent = state.height ? `${state.height} cm` : '설정 안 함';
+}
+function pickSettingsGender(el){
+  document.querySelectorAll('#genderChipRow .chip').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.gender = el.dataset.v;
+  renderMyInfo();
+  saveState();
+}
+function saveSettingsHeight(){
+  const v = document.getElementById('settingsHeightInput').value.trim();
+  state.height = v || null;
+  renderMyInfo();
+  saveState();
+  closeModal('height');
 }
 
 /* =============== NAV =============== */
@@ -568,6 +637,7 @@ function renderStyleChips(){
 function selectStyle(s){
   state.style = s;
   renderStyleChips();
+  saveState();
   if(state.lastWeather){
     const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
     renderOutfit(feel, rainProb, windSpeed, wcode);
@@ -769,6 +839,7 @@ function setActiveLocation(idx){
   document.getElementById('homeLocText').textContent = `📍 ${state.loc.name}`;
   renderLocList();
   fetchWeather();
+  saveState();
 }
 function removeLocation(idx){
   const wasActive = state.activeIdx===idx;
@@ -777,11 +848,19 @@ function removeLocation(idx){
   else {
     if(typeof state.activeIdx==='number' && state.activeIdx>idx) state.activeIdx -= 1;
     renderLocList();
+    saveState();
   }
 }
 function openModal(name){
   document.getElementById('modal-'+name).classList.add('active');
   if(name==='addLoc') document.getElementById('addLocError').style.display = 'none';
+  if(name==='gender'){
+    const cur = state.gender || '선택안함';
+    document.querySelectorAll('#genderChipRow .chip').forEach(c=>c.classList.toggle('selected', c.dataset.v===cur));
+  }
+  if(name==='height'){
+    document.getElementById('settingsHeightInput').value = state.height || '';
+  }
 }
 function closeModal(name){ document.getElementById('modal-'+name).classList.remove('active'); }
 async function addLocation(){
@@ -805,6 +884,7 @@ async function addLocation(){
   }
   document.getElementById('newLocName').value='';
   renderLocList();
+  saveState();
   closeModal('addLoc');
 }
 
@@ -821,6 +901,39 @@ function renderNotis(){
       </div>
     </div>`).join('');
 }
+
+/* =============== INIT: 저장된 설정 있으면 온보딩 건너뛰기 =============== */
+function init(){
+  const saved = loadSavedState();
+  if(!saved || !saved.onboarded){
+    return; // 저장된 게 없으면 기본값대로 온보딩 화면 그대로 둠
+  }
+  state.gender = saved.gender ?? null;
+  state.height = saved.height ?? null;
+  state.style = saved.style || state.style;
+  state.extraLocs = Array.isArray(saved.extraLocs) ? saved.extraLocs : [];
+  state.activeIdx = (saved.activeIdx === 'main' || (typeof saved.activeIdx==='number' && state.extraLocs[saved.activeIdx])) ? saved.activeIdx : 'main';
+
+  document.getElementById('bottomnav').classList.add('show');
+  document.getElementById('onb').classList.remove('active');
+  document.getElementById('home').classList.add('active');
+
+  renderStyleChips();
+  renderLocList();
+  renderNotis();
+  renderMyInfo();
+  seedChat();
+
+  if(state.activeIdx !== 'main'){
+    const l = state.extraLocs[state.activeIdx];
+    state.loc = {name:l.name, lat:l.lat, lon:l.lon};
+    document.getElementById('homeLocText').textContent = `📍 ${state.loc.name}`;
+    fetchWeather();
+  } else {
+    requestLocation();
+  }
+}
+init();
 </script>
 </body>
 </html>
