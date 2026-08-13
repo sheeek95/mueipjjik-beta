@@ -26,11 +26,9 @@ const SYSTEM_PROMPT =
   "반드시 자연스러운 한국어 문장으로만 답하고, 영어·한자·다른 외국어 단어를 절대 섞지 마. " +
   "별표(*), 마크다운 기호, 번호 매기기는 쓰지 말고 대화하듯 문장을 이어서 말해. " +
   "문장을 '~것 같아', '~는데'로 얼버무리며 끝내지 말고 '~할게', '~수 있어', '~돼'처럼 확실하고 " +
-  "자연스럽게 끝내. 문장 중간에 '~하지?' 같은 반문도 쓰지 마. " +
-  "좋은 예시: '오늘은 캐주얼한 스타일로 추천할게! 루즈핏 반팔티와 와이드 반바지를 조합하면 편하고 " +
-  "쾌적한 느낌을 줄 수 있어. 스니커즈를 신으면 캐주얼한 느낌을 더 줄 수 있어서 완벽한 여름룩이 완성돼!' " +
-  "이 예시처럼 자연스럽게 답해. " +
-  "아래 [오늘의 추천 코디]가 이미 계산된 정답이니 지어내지 말고 이 아이템들을 그대로 언급하면서 자연스럽게 설명해줘.";
+  "자연스럽게 끝내. 물음표(?)로 끝나는 반문이나 '~하고 싶다면?' 같은 되묻는 말투는 절대 쓰지 마. " +
+  "같은 말을 형태만 바꿔 반복하지 말고, 문장마다 새로운 정보만 담아서 간결하게 말해. " +
+  "이모지·문장부호를 과하게 쓰지 말고 딱 필요한 만큼만 써.";
 
 // llama-3.1-8b-instruct(지원종료, 2026-05-30) -> llama-3.2-3b-instruct로 교체했다가
 // 한국어에 영어/태국어/힌디어가 무작위로 섞여 나오는 문제가 있어서 다시 교체함.
@@ -76,6 +74,7 @@ export async function onRequestPost(context) {
     const outfitFact = buildOutfitFact(weather);
     const trendContext = await fetchTrendContext(env, weather);
     const systemPrompt = SYSTEM_PROMPT + outfitFact + trendContext;
+    const history = sanitizeHistory(body && body.history);
 
     let reply;
     if (imageBlock) {
@@ -84,9 +83,13 @@ export async function onRequestPost(context) {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
+      const historyText = history.length
+        ? `\n\n[지금까지의 대화]\n${history.map((m) => `${m.role === 'user' ? '사용자' : '핏치'}: ${m.content}`).join('\n')}`
+        : '';
+
       const result = await runAI(env, VISION_MODEL, {
         image: Array.from(bytes),
-        prompt: `${systemPrompt}\n\n사용자: ${userText}`,
+        prompt: `${systemPrompt}${historyText}\n\n사용자: ${userText}`,
         max_tokens: MAX_TOKENS,
         temperature: 0.4,
       });
@@ -96,6 +99,7 @@ export async function onRequestPost(context) {
       const result = await runAI(env, TEXT_MODEL, {
         messages: [
           { role: 'system', content: systemPrompt },
+          ...history,
           { role: 'user', content: userText },
         ],
         max_tokens: MAX_TOKENS,
@@ -131,6 +135,15 @@ async function runAI(env, model, input) {
   }
 }
 
+// 프론트에서 보낸 최근 대화 몇 턴을 신뢰할 수 있는 형태로만 골라 씀 (role/content 타입 강제, 길이 제한)
+function sanitizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .slice(-6)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 500) }));
+}
+
 function safeStringify(obj) {
   try {
     return JSON.stringify(obj);
@@ -143,10 +156,14 @@ function safeStringify(obj) {
 // 모델이 스스로 옷차림을 지어내지 않고, 이미 정해진 조합을 자연스럽게 설명하게 하기 위함.
 function buildOutfitFact(weather) {
   if (!weather || !Array.isArray(weather.items) || !weather.items.length) return '';
-  const bits = [`[오늘의 추천 코디] ${weather.items.join(', ')}`];
+  const bits = [`[오늘 홈 화면에 떠 있는 추천 코디] ${weather.items.join(', ')}`];
   if (weather.shoe) bits.push(`신발: ${weather.shoe}`);
   if (weather.style) bits.push(`스타일: ${weather.style}`);
-  return `\n\n${bits.join(' / ')}`;
+  return (
+    `\n\n${bits.join(' / ')}\n` +
+    '사용자가 오늘 코디에 대해 물어보면 이 조합을 그대로 언급해. ' +
+    '하지만 사용자가 다른 스타일이나 다른 조합을 원한다고 하면, 이 조합에 얽매이지 말고 날씨와 계절에 어울리는 새로운 아이템 조합을 자유롭게 새로 제안해.'
+  );
 }
 
 // ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품 + 유튜브 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----

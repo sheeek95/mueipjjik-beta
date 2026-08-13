@@ -69,6 +69,11 @@ async function searchNcpGeocode(env, query) {
 async function searchOpenMeteoGeocode(query) {
   try {
     const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=ko`);
+    if (!res.ok) {
+      let bodyText = '';
+      try { bodyText = await res.text(); } catch (e) { /* 무시 */ }
+      return { source: 'open-meteo', results: [], debug: `open-meteo geocode ${res.status}: ${bodyText.slice(0, 200)}` };
+    }
     const data = await res.json();
     const results = Array.isArray(data.results) ? data.results : [];
     const koreaOnly = results.filter((r) => !r.country_code || r.country_code === 'KR');
@@ -82,6 +87,6 @@ async function searchOpenMeteoGeocode(query) {
       })),
     };
   } catch (e) {
-    return { source: 'open-meteo', results: [] };
+    return { source: 'open-meteo', results: [], debug: `open-meteo geocode fetch error: ${String(e)}` };
   }
 }

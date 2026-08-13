@@ -890,13 +890,14 @@ function renderProducts(groups){
 }
 
 /* =============== AI 채팅 API HELPER =============== */
-async function callFitchAI(userContent, weatherCtx){
+async function callFitchAI(userContent, weatherCtx, history){
   // /api/chat (Cloudflare Pages Function)이 서버에서 Cloudflare Workers AI를 호출함. 브라우저에는 키가 없음.
   // weatherCtx를 같이 보내면 서버가 날씨/계절에 맞는 네이버 블로그 코디 트렌드를 검색해 답변에 참고함.
+  // history를 같이 보내면 "다른 스타일 추천해줘" 같은 이전 맥락 의존 질문도 이어서 이해할 수 있음.
   const res = await fetch('/api/chat', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ content: userContent, weather: weatherCtx })
+    body: JSON.stringify({ content: userContent, weather: weatherCtx, history })
   });
   const data = await res.json();
   if(!res.ok) throw new Error(data.error || 'API 오류');
@@ -919,6 +920,7 @@ function currentWeatherCtx(){
 
 /* =============== CHAT: COORDI TAB =============== */
 let pendingImage = null;
+let chatHistory = []; // [{role, content}] 최근 대화만 유지 (새로고침하면 초기화)
 function seedChat(){
   addBotMsg('안녕! 나는 패션요정 핏치야 🐹 오늘 입은 코디 사진을 보내주면 색조합이랑 핏을 봐줄게. 궁금한 거 편하게 물어봐!');
 }
@@ -965,9 +967,12 @@ async function sendChat(){
       content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
     }
     const weatherCtx = currentWeatherCtx();
-    const reply = await callFitchAI(content, weatherCtx);
+    const reply = await callFitchAI(content, weatherCtx, chatHistory);
     loadingRow.remove();
     addBotMsg(reply);
+    chatHistory.push({role:'user', content: text || '[사진 첨부]'});
+    chatHistory.push({role:'assistant', content: reply});
+    if(chatHistory.length > 6) chatHistory = chatHistory.slice(-6);
     if(weatherCtx) addBotProductCards(weatherCtx.items.slice(0,2), weatherCtx);
   }catch(err){
     loadingRow.remove();
