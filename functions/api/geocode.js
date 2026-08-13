@@ -32,12 +32,15 @@ export async function onRequestGet(context) {
     const kakaoResult = await searchKakaoGeocode(env, query);
     if (kakaoResult.results.length) return jsonResponse(kakaoResult);
     // 카카오가 설정돼 있는데 결과가 없으면(에러 포함) Open-Meteo로 폴백하되 원인은 debug로 남김
+    // (카카오가 진짜 0건을 반환한 건지, 요청 자체가 실패한 건지 구분되게 항상 debug를 채움)
     const fallback = await searchOpenMeteoGeocode(query);
-    if (kakaoResult.debug) fallback.debug = kakaoResult.debug;
+    fallback.debug = kakaoResult.debug || 'kakao: 주소/키워드 검색 모두 0건 (API 자체는 정상 응답)';
     return jsonResponse(fallback);
   }
 
-  return jsonResponse(await searchOpenMeteoGeocode(query));
+  const fallback = await searchOpenMeteoGeocode(query);
+  fallback.debug = fallback.debug || 'KAKAO_REST_API_KEY 환경변수가 비어 있어서 open-meteo만 사용함';
+  return jsonResponse(fallback);
 }
 
 async function searchKakaoGeocode(env, query) {
