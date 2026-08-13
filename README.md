@@ -7,6 +7,7 @@
 index.html                프론트엔드 전체 (온보딩/홈/AI채팅/설정/알림)
 functions/api/chat.js     AI 채팅 프록시 (Cloudflare Pages Function, Cloudflare Workers AI 무료 티어 사용)
 functions/api/products.js 홈 화면 "실제 코디템 추천" 카드용 네이버 쇼핑 검색 프록시
+functions/api/geocode.js   위치(동네) 검색 → 좌표 변환 프록시 (NCP Maps Geocoding, 없으면 Open-Meteo로 대체)
 lib/naver.js               네이버 검색 API(블로그/쇼핑) 헬퍼
 lib/youtube.js              YouTube Data API 헬퍼 (트렌드 검색 + 캐싱)
 lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
@@ -49,8 +50,16 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 - YouTube Data API: 프로젝트당 하루 10,000 unit 무료인데, 검색(`search.list`) 1회가 100 unit이라 **실질적으로 하루 최대 약 100회 검색**밖에 못 해요. 그래서 `RATE_LIMIT_KV`가 연결돼 있으면 같은 날씨 조건의 검색 결과를 6시간 동안 캐싱해서 실제 호출 수를 크게 줄여요(사용자가 많아도 같은 계절/기온대면 캐시를 재사용).
 - 채팅·상품 조회 모두 `RATE_LIMIT_KV`로 IP당 요청 수를 제한해서 위 한도들을 추가로 보호해요.
 
+## 위치(동네) 검색 정확도 개선 (선택 기능)
+설정 탭에서 동네를 검색할 때 기본으로는 Open-Meteo 지오코딩(무료, 키 불필요)을 쓰는데, 이건 한국 동/구 단위 행정구역 커버리지가 얇아서 "금천구"처럼 일부 검색어가 아예 안 나오는 경우가 있어요. 아래 환경변수를 추가하면 **NCP Maps Geocoding API**를 우선 쓰도록 자동 전환돼서 훨씬 정확해져요:
+
+- **`NCP_MAPS_CLIENT_ID` / `NCP_MAPS_CLIENT_SECRET`가 있으면**: `functions/api/geocode.js`가 먼저 NCP Maps Geocoding으로 검색하고, 결과가 없거나 에러가 나면 자동으로 Open-Meteo 지오코딩으로 대체해요 (완전히 실패하는 일은 없음).
+- 설정하지 않으면 기존처럼 Open-Meteo만 써요.
+
+발급 방법: 이미 NAVER API HUB(위 코디 트렌드용)를 신청했다면 **같은 ncloud.com 콘솔**에서 AI·NAVER API > **Maps** > **Geocoding** 상품을 추가로 이용 신청하면 돼요 (검색 API와는 별개 상품이라 Client ID/Secret이 다를 수 있어요 — 발급된 값을 그대로 `NCP_MAPS_CLIENT_ID`/`NCP_MAPS_CLIENT_SECRET`에 등록). Maps Geocoding은 월 무료 사용량이 제공돼요.
+
 ## 참고
-- 날씨(Open-Meteo), 위치 지오코딩(Open-Meteo Geocoding), 역지오코딩(BigDataCloud) API는 모두 키가 필요 없어서 브라우저에서 바로 호출돼요.
+- 날씨(Open-Meteo), 역지오코딩(BigDataCloud) API는 키가 필요 없어서 브라우저에서 바로 호출돼요. 위치(동네) 검색은 `/api/geocode`를 통해 서버에서 처리돼요 (NCP Maps 우선, 없으면 Open-Meteo 대체).
 - 기본 위치는 서울시 강남구예요. 위치 권한을 허용하면 현재 위치로, 거부하면 강남구 좌표로 날씨를 보여줘요.
 - 설정 탭에서 위치를 추가하면 목록에서 눌러 활성 위치를 바로 전환할 수 있고, ✕ 버튼으로 삭제할 수 있어요.
 - 설정 탭 "내 정보"에서 온보딩 때 입력한 성별/키를 나중에 다시 확인하고 바꿀 수 있어요.

@@ -1084,22 +1084,15 @@ async function searchLocations(){
   resultsEl.innerHTML = '';
   if(!name) return;
   try{
-    // countryCode=KR 서버 파라미터를 붙였더니 "서울"처럼 흔한 검색어가 결과 자체를 0건으로 돌려주는 문제가 있어서
-    // (Open-Meteo 쪽 필터링 동작이 기대와 달랐던 것으로 보임) 뺐음. 대신 받아온 결과에서 클라이언트가 직접
-    // 한국이 아닌 지역(주로 북한)을 걸러냄 — 걸러내고 나서 하나도 안 남으면 과도한 필터링일 수 있으니 원본을 그대로 씀
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=ko`);
+    // 서버(/api/geocode)가 NCP Maps Geocoding(한국 동/구 단위 정확도 높음)을 우선 쓰고,
+    // 설정 안 돼 있으면 Open-Meteo 지오코딩으로 자동 대체함. 응답 형태는 항상 동일하게 정규화됨.
+    const res = await fetch(`/api/geocode?query=${encodeURIComponent(name)}`);
     const data = await res.json();
     if(!data.results || !data.results.length){
       errEl.style.display = 'block';
       return;
     }
-    const koreaOnly = data.results.filter(r => !r.country_code || r.country_code === 'KR');
-    const results = koreaOnly.length ? koreaOnly : data.results;
-    // 동네 이름이 같아도 구분되도록 시/군/구(admin2)까지 라벨에 포함
-    locCandidates = results.map(r => ({
-      name: [r.name, r.admin2, r.admin1].filter((v,i,arr)=>v && arr.indexOf(v)===i).join(', '),
-      lat: r.latitude, lon: r.longitude
-    }));
+    locCandidates = data.results;
     resultsEl.innerHTML = locCandidates.map((c,i)=>`<div class="loc-result-item" onclick="selectLocationCandidate(${i})">📍 ${escapeHtml(c.name)}</div>`).join('');
     resultsEl.style.display = 'block';
   }catch(e){
