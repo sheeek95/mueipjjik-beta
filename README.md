@@ -51,15 +51,19 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 - 채팅·상품 조회 모두 `RATE_LIMIT_KV`로 IP당 요청 수를 제한해서 위 한도들을 추가로 보호해요.
 
 ## 위치(동네) 검색 정확도 개선 (선택 기능)
-설정 탭에서 동네를 검색할 때 기본으로는 Open-Meteo 지오코딩(무료, 키 불필요)을 쓰는데, 이건 한국 동/구 단위 행정구역 커버리지가 얇아서 "금천구"처럼 일부 검색어가 아예 안 나오는 경우가 있어요. 아래 환경변수를 추가하면 **NCP Maps Geocoding API**를 우선 쓰도록 자동 전환돼서 훨씬 정확해져요:
+설정 탭에서 동네를 검색할 때 기본으로는 Open-Meteo 지오코딩(무료, 키 불필요)을 쓰는데, 이건 한국 동/구 단위 행정구역 커버리지가 얇아서 "금천구"처럼 일부 검색어가 아예 안 나오는 경우가 있어요. 아래 환경변수를 추가하면 **카카오 로컬 API**를 우선 쓰도록 자동 전환돼서 훨씬 정확해져요:
 
-- **`NCP_MAPS_CLIENT_ID` / `NCP_MAPS_CLIENT_SECRET`가 있으면**: `functions/api/geocode.js`가 먼저 NCP Maps Geocoding으로 검색하고, 결과가 없거나 에러가 나면 자동으로 Open-Meteo 지오코딩으로 대체해요 (완전히 실패하는 일은 없음).
+- **`KAKAO_REST_API_KEY`가 있으면**: `functions/api/geocode.js`가 먼저 카카오 주소 검색으로 조회하고(정식 지번/도로명 주소용), 결과가 없으면 카카오 키워드 검색으로 재시도(구/동 이름만 검색해도 잡힘), 그래도 실패하면 자동으로 Open-Meteo 지오코딩으로 대체해요 (완전히 실패하는 일은 없음).
 - 설정하지 않으면 기존처럼 Open-Meteo만 써요.
 
-발급 방법: 이미 NAVER API HUB(위 코디 트렌드용)를 신청했다면 **같은 ncloud.com 콘솔**에서 AI·NAVER API > **Maps** > **Geocoding** 상품을 추가로 이용 신청하면 돼요 (검색 API와는 별개 상품이라 Client ID/Secret이 다를 수 있어요 — 발급된 값을 그대로 `NCP_MAPS_CLIENT_ID`/`NCP_MAPS_CLIENT_SECRET`에 등록). Maps Geocoding은 월 무료 사용량이 제공돼요.
+(참고: 처음엔 NCP Maps Geocoding을 썼는데, 무료 한도 안에서도 결제수단 등록이 필요해서 카드 등록 없이 하루 10만 건 무료인 카카오 로컬 API로 바꿨어요.)
+
+발급 방법: [Kakao Developers](https://developers.kakao.com) 로그인 > 내 애플리케이션 > **애플리케이션 추가하기** > 앱 생성하면 **REST API 키**가 자동 발급돼요 (플랫폼/도메인 등록, 카드 등록 전혀 필요 없음) > 발급된 키를 Cloudflare 환경변수 `KAKAO_REST_API_KEY`에 등록.
+
+⚠️ 할당량: 카카오 로컬 API는 앱당 하루 100,000건 무료예요. `checkRateLimit`으로 IP당 하루 요청 수도 제한해서 이 한도를 보호해요.
 
 ## 참고
-- 날씨(Open-Meteo), 역지오코딩(BigDataCloud) API는 키가 필요 없어서 브라우저에서 바로 호출돼요. 위치(동네) 검색은 `/api/geocode`를 통해 서버에서 처리돼요 (NCP Maps 우선, 없으면 Open-Meteo 대체).
+- 날씨(Open-Meteo), 역지오코딩(BigDataCloud) API는 키가 필요 없어서 브라우저에서 바로 호출돼요. 위치(동네) 검색은 `/api/geocode`를 통해 서버에서 처리돼요 (카카오 로컬 API 우선, 없으면 Open-Meteo 대체).
 - 기본 위치는 서울시 강남구예요. 위치 권한을 허용하면 현재 위치로, 거부하면 강남구 좌표로 날씨를 보여줘요.
 - 설정 탭에서 위치를 추가하면 목록에서 눌러 활성 위치를 바로 전환할 수 있고, ✕ 버튼으로 삭제할 수 있어요.
 - 설정 탭 "내 정보"에서 온보딩 때 입력한 성별/키를 나중에 다시 확인하고 바꿀 수 있어요.

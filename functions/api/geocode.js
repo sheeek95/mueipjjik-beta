@@ -2,14 +2,16 @@
 // 배포 경로: /api/geocode
 //
 // 위치(동네 이름) 검색을 좌표로 변환함. 한국 동/구 단위 정확도가 훨씬 높은
-// NCP Maps Geocoding API를 우선 쓰고, 설정 안 돼 있으면 Open-Meteo 지오코딩(무료,
+// 카카오 로컬 API를 우선 쓰고, 설정 안 돼 있으면 Open-Meteo 지오코딩(무료,
 // 키 불필요하지만 한국 행정구역 커버리지가 얇음)으로 자동 대체함.
 //
+// NCP Maps Geocoding을 먼저 써봤는데 무료 한도 안에서도 결제수단 등록이 필요해서
+// 카카오 로컬 API로 교체함 (하루 10만 건 무료, 카드 등록 불필요).
+//
 // 설정 방법 (선택 사항, 없어도 Open-Meteo로 동작함):
-//   NCP 콘솔(ncloud.com) > AI·NAVER API > Maps > Geocoding 이용 신청
-//   -> 발급되는 Client ID / Client Secret을 Cloudflare 환경변수
-//      NCP_MAPS_CLIENT_ID / NCP_MAPS_CLIENT_SECRET 에 등록
-//   (NAVER_CLIENT_ID/SECRET과는 별개의 애플리케이션/키일 수 있음 — 검색 API와 Maps는 다른 상품임)
+//   Kakao Developers(developers.kakao.com) 로그인 > 내 애플리케이션 > 애플리케이션 추가
+//   -> 앱 생성 시 자동 발급되는 "REST API 키"를 Cloudflare 환경변수
+//      KAKAO_REST_API_KEY 에 등록 (플랫폼/도메인 등록 없이 서버에서 바로 호출 가능)
 
 import { checkRateLimit, jsonResponse } from '../../lib/naver.js';
 
@@ -26,44 +28,59 @@ export async function onRequestGet(context) {
     return jsonResponse({ results: [], debug: 'IP당 하루 요청 한도 초과' }, 429);
   }
 
-  if (env.NCP_MAPS_CLIENT_ID && env.NCP_MAPS_CLIENT_SECRET) {
-    const ncpResult = await searchNcpGeocode(env, query);
-    if (ncpResult.results.length) return jsonResponse(ncpResult);
-    // NCP가 설정돼 있는데 결과가 없으면(에러 포함) Open-Meteo로 폴백하되 원인은 debug로 남김
+  if (env.KAKAO_REST_API_KEY) {
+    const kakaoResult = await searchKakaoGeocode(env, query);
+    if (kakaoResult.results.length) return jsonResponse(kakaoResult);
+    // 카카오가 설정돼 있는데 결과가 없으면(에러 포함) Open-Meteo로 폴백하되 원인은 debug로 남김
     const fallback = await searchOpenMeteoGeocode(query);
-    if (ncpResult.debug) fallback.debug = ncpResult.debug;
+    if (kakaoResult.debug) fallback.debug = kakaoResult.debug;
     return jsonResponse(fallback);
   }
 
   return jsonResponse(await searchOpenMeteoGeocode(query));
 }
 
-async function searchNcpGeocode(env, query) {
+async function searchKakaoGeocode(env, query) {
+  const headers = { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` };
   try {
-    const res = await fetch(`https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(query)}`, {
-      headers: {
-        'X-NCP-APIGW-API-KEY-ID': env.NCP_MAPS_CLIENT_ID,
-        'X-NCP-APIGW-API-KEY': env.NCP_MAPS_CLIENT_SECRET,
-      },
-    });
-    if (!res.ok) {
-      let bodyText = '';
-      try { bodyText = await res.text(); } catch (e) { /* 무시 */ }
-      return { source: 'ncp', results: [], debug: `ncp geocode ${res.status}: ${bodyText.slice(0, 200)}` };
+    // 1) 주소 검색(정식 지번/도로명 주소용) 먼저 시도
+    const addrDocs = await kakaoRequest('https://dapi.kakao.com/v2/local/search/address.json', query, headers);
+    if (addrDocs.error) return { source: 'kakao', results: [], debug: addrDocs.error };
+    if (addrDocs.documents.length) {
+      return {
+        source: 'kakao',
+        results: addrDocs.documents.map((d) => ({
+          name: d.address_name || query,
+          lat: parseFloat(d.y),
+          lon: parseFloat(d.x),
+        })),
+      };
     }
-    const data = await res.json();
-    const addresses = Array.isArray(data.addresses) ? data.addresses : [];
+    // 2) 주소 검색 결과가 없으면(예: "금천구"처럼 완전한 주소 형식이 아닌 경우) 키워드 검색으로 재시도
+    const kwDocs = await kakaoRequest('https://dapi.kakao.com/v2/local/search/keyword.json', query, headers);
+    if (kwDocs.error) return { source: 'kakao', results: [], debug: kwDocs.error };
     return {
-      source: 'ncp',
-      results: addresses.map((a) => ({
-        name: a.roadAddress || a.jibunAddress || query,
-        lat: parseFloat(a.y),
-        lon: parseFloat(a.x),
+      source: 'kakao',
+      results: kwDocs.documents.map((d) => ({
+        name: d.address_name || d.place_name || query,
+        lat: parseFloat(d.y),
+        lon: parseFloat(d.x),
       })),
     };
   } catch (e) {
-    return { source: 'ncp', results: [], debug: `ncp geocode fetch error: ${String(e)}` };
+    return { source: 'kakao', results: [], debug: `kakao geocode fetch error: ${String(e)}` };
   }
+}
+
+async function kakaoRequest(endpoint, query, headers) {
+  const res = await fetch(`${endpoint}?query=${encodeURIComponent(query)}`, { headers });
+  if (!res.ok) {
+    let bodyText = '';
+    try { bodyText = await res.text(); } catch (e) { /* 무시 */ }
+    return { documents: [], error: `kakao ${res.status}: ${bodyText.slice(0, 200)}` };
+  }
+  const data = await res.json();
+  return { documents: Array.isArray(data.documents) ? data.documents : [] };
 }
 
 async function searchOpenMeteoGeocode(query) {
