@@ -140,9 +140,8 @@
   }
   .outfit-tier{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:4px; }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
+  .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
-  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700; }
 
   /* ---------- chat ---------- */
   .tab-row{ display:flex; margin:10px 20px 6px; background:var(--line); border-radius:14px; padding:4px; }
@@ -491,6 +490,10 @@
 /* =============== STATE =============== */
 const state = {
   gender:null, height:null,
+  // mainLoc: "메인 위치" 슬롯의 고정 정보(GPS로 찾은 위치 또는 기본값). 위치 목록 맨 위 항목 라벨은
+  // 항상 이 값을 씀. loc: 지금 화면에 쓰이는(날씨 조회용) 활성 좌표 — activeIdx가 'main'이 아니면
+  // extraLocs 쪽 좌표로 바뀌지만, 그렇다고 mainLoc이 같이 바뀌면 안 됨(메인 위치가 다른 위치로 "복제"되는 버그 방지).
+  mainLoc:{name:'서울 강남구', lat:37.5172, lon:127.0473},
   loc:{name:'서울 강남구', lat:37.5172, lon:127.0473},
   activeIdx:'main',
   extraLocs:[],
@@ -510,7 +513,8 @@ function saveState(){
       height: state.height,
       style: state.style,
       extraLocs: state.extraLocs,
-      activeIdx: state.activeIdx
+      activeIdx: state.activeIdx,
+      mainLoc: state.mainLoc
     }));
   }catch(e){ /* 브라우저가 저장소를 막아둔 경우(시크릿 모드 등) 조용히 무시 */ }
 }
@@ -601,11 +605,13 @@ function requestLocation(){
           .filter((v, i, arr) => v && arr.indexOf(v) === i)
           .join(' ') || '현재 위치';
       }catch(e){ /* 역지오코딩 실패 시 기본 라벨 사용 */ }
-      state.loc = {name, lat, lon};
+      state.mainLoc = {name, lat, lon};
+      state.loc = state.mainLoc;
       state.activeIdx = 'main';
       document.getElementById('homeLocText').textContent = `📍 ${name}`;
       renderLocList();
       fetchWeather();
+      saveState();
     }, ()=>{ document.getElementById('homeLocText').textContent = '📍 서울 강남구 (기본 위치)'; fetchWeather(); });
   } else {
     document.getElementById('homeLocText').textContent = '📍 서울 강남구 (기본 위치)';
@@ -932,7 +938,7 @@ function renderLocList(){
   const wrap = document.getElementById('locList');
   const mainActive = state.activeIdx==='main';
   let html = `<div class="loc-item ${mainActive?'active':''}" onclick="setActiveLocation('main')">
-    <span class="loc-left">📍 ${state.loc.name}</span>
+    <span class="loc-left">📍 ${state.mainLoc.name}</span>
     <span class="loc-actions">${mainActive?'<span class="badge done">현재 선택</span>':''}</span>
   </div>`;
   html += state.extraLocs.map((l,i)=>`
@@ -948,6 +954,7 @@ function renderLocList(){
 function setActiveLocation(idx){
   if(idx==='main'){
     state.activeIdx = 'main';
+    state.loc = {name:state.mainLoc.name, lat:state.mainLoc.lat, lon:state.mainLoc.lon};
   } else {
     const l = state.extraLocs[idx];
     if(!l) return;
@@ -995,11 +1002,12 @@ async function searchLocations(){
   resultsEl.innerHTML = '';
   if(!name) return;
   try{
-    // 서버(/api/geocode)가 NCP Maps Geocoding(한국 동/구 단위 정확도 높음)을 우선 쓰고,
+    // 서버(/api/geocode)가 카카오 로컬 API(한국 동/구 단위 정확도 높음)를 우선 쓰고,
     // 설정 안 돼 있으면 Open-Meteo 지오코딩으로 자동 대체함. 응답 형태는 항상 동일하게 정규화됨.
     const res = await fetch(`/api/geocode?query=${encodeURIComponent(name)}`);
     const data = await res.json();
     if(!data.results || !data.results.length){
+      errEl.textContent = '위치를 찾지 못했어. 다른 이름으로 시도해줘.';
       errEl.style.display = 'block';
       return;
     }
@@ -1010,9 +1018,23 @@ async function searchLocations(){
     errEl.style.display = 'block';
   }
 }
+// 이름이 같거나(가장 흔한 케이스) 좌표가 사실상 같으면(다른 지오코딩 소스라 이름 표기가 미묘하게
+// 다를 때 대비) 같은 위치로 취급함
+function isSameLoc(a, b){
+  if(a.name === b.name) return true;
+  return Math.abs(a.lat - b.lat) < 0.001 && Math.abs(a.lon - b.lon) < 0.001;
+}
 function selectLocationCandidate(i){
   const c = locCandidates[i];
   if(!c) return;
+  const errEl = document.getElementById('addLocError');
+  const isDuplicate = isSameLoc(c, state.mainLoc) || state.extraLocs.some(l => isSameLoc(c, l));
+  if(isDuplicate){
+    errEl.textContent = '이미 등록되어있어요!';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
   state.extraLocs.push({name:c.name, lat:c.lat, lon:c.lon});
   document.getElementById('newLocName').value = '';
   document.getElementById('locSearchResults').style.display = 'none';
@@ -1098,6 +1120,7 @@ function init(){
   state.style = saved.style || state.style;
   state.extraLocs = Array.isArray(saved.extraLocs) ? saved.extraLocs : [];
   state.activeIdx = (saved.activeIdx === 'main' || (typeof saved.activeIdx==='number' && state.extraLocs[saved.activeIdx])) ? saved.activeIdx : 'main';
+  if(saved.mainLoc && saved.mainLoc.name){ state.mainLoc = saved.mainLoc; }
 
   document.getElementById('bottomnav').classList.add('show');
   document.getElementById('onb').classList.remove('active');
