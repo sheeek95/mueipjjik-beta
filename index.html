@@ -12,8 +12,20 @@
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
+  /* 본문 폰트: 펴진고딕(PyeojinGothic, SIL OFL 라이선스 — 상업적 이용/재배포 무료) 자체 호스팅.
+     헤더/타이틀(.display)은 기존 Jua(구글 폰트)를 그대로 유지. */
+  @font-face{
+    font-family:'Pyeojin Gothic';
+    src:url('/fonts/PyeojinGothic-Regular.woff2') format('woff2');
+    font-weight:400; font-style:normal; font-display:swap;
+  }
+  @font-face{
+    font-family:'Pyeojin Gothic';
+    src:url('/fonts/PyeojinGothic-Bold.woff2') format('woff2');
+    font-weight:700; font-style:normal; font-display:swap;
+  }
   :root{
     --bg:#FFF7EE;
     --card:#FFFFFF;
@@ -31,7 +43,7 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html, body{ height:100%; }
   body{
-    margin:0; background:#EDE3D6; font-family:'Gowun Dodum',sans-serif; color:var(--ink);
+    margin:0; background:#EDE3D6; font-family:'Pyeojin Gothic',sans-serif; color:var(--ink);
     display:flex; justify-content:center;
     height:100vh; height:100dvh;
   }
@@ -60,12 +72,12 @@
   .chip-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
   .chip{
     padding:12px 20px; border-radius:999px; border:2px solid var(--line); background:var(--card);
-    cursor:pointer; font-family:'Gowun Dodum'; font-size:14px; color:var(--ink); transition:.15s;
+    cursor:pointer; font-family:'Pyeojin Gothic'; font-size:14px; color:var(--ink); transition:.15s;
   }
   .chip.selected{ border-color:var(--peach-deep); background:#FFEFE7; color:var(--peach-deep); font-weight:700;}
   .obinput{
     width:100%; max-width:280px; padding:14px 16px; border-radius:14px; border:2px solid var(--line);
-    font-family:'Gowun Dodum'; font-size:15px; text-align:center; background:var(--card);
+    font-family:'Pyeojin Gothic'; font-size:15px; text-align:center; background:var(--card);
   }
   .primary-btn{
     width:100%; max-width:280px; padding:15px; border-radius:14px; border:none; background:var(--peach-deep);
@@ -155,7 +167,7 @@
   .bot-row{ display:flex; gap:8px; align-items:flex-end; }
   .bot-row .avatar{ width:28px; height:28px; flex-shrink:0; }
   .chat-input-bar{ display:flex; gap:8px; padding:10px 14px 14px; border-top:1px solid var(--line); background:var(--bg); align-items:center;}
-  .chat-input-bar input[type=text]{ flex:1; border:2px solid var(--line); border-radius:20px; padding:11px 16px; font-family:'Gowun Dodum'; font-size:14px; }
+  .chat-input-bar input[type=text]{ flex:1; border:2px solid var(--line); border-radius:20px; padding:11px 16px; font-family:'Pyeojin Gothic'; font-size:14px; }
   .round-btn{ width:42px; height:42px; border-radius:50%; border:none; background:var(--card); border:2px solid var(--line); cursor:pointer; font-size:17px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
   .send-btn{ background:var(--peach-deep); color:white; border:none; }
   .fitting-panel{ padding:16px 20px; display:flex; flex-direction:column; gap:12px; }
@@ -178,13 +190,13 @@
   .switch.on{ background:var(--sage-deep); }
   .switch .knob{ position:absolute; top:3px; left:3px; width:20px; height:20px; background:white; border-radius:50%; transition:.2s; }
   .switch.on .knob{ left:21px; }
-  .time-input{ border:2px solid var(--line); border-radius:10px; padding:5px 8px; font-family:'Gowun Dodum'; font-size:13px; }
+  .time-input{ border:2px solid var(--line); border-radius:10px; padding:5px 8px; font-family:'Pyeojin Gothic'; font-size:13px; }
   .loc-item{ display:flex; align-items:center; justify-content:space-between; background:var(--card); border-radius:14px; padding:12px 16px; margin-bottom:8px; font-size:14px; cursor:pointer; border:2px solid transparent; }
   .loc-item.active{ border-color:var(--peach-deep); }
   .loc-item .loc-left{ display:flex; align-items:center; gap:8px; }
   .loc-item .loc-actions{ display:flex; align-items:center; gap:8px; }
   .loc-remove{ background:none; border:none; color:var(--ink-soft); font-size:16px; cursor:pointer; padding:2px 4px; }
-  .add-loc-btn{ width:100%; padding:12px; border-radius:14px; border:2px dashed var(--line); background:none; color:var(--ink-soft); font-family:'Gowun Dodum'; cursor:pointer; }
+  .add-loc-btn{ width:100%; padding:12px; border-radius:14px; border:2px dashed var(--line); background:none; color:var(--ink-soft); font-family:'Pyeojin Gothic'; cursor:pointer; }
   .badge{ font-size:11px; padding:3px 8px; border-radius:8px; font-weight:700; }
   .badge.wait{ background:#FFE9DC; color:var(--peach-deep); }
   .badge.done{ background:#E2F1DE; color:var(--sage-deep); }
@@ -193,13 +205,13 @@
   .modal-bg.active{ display:flex; }
   .modal{ background:var(--card); border-radius:20px; padding:22px; width:100%; max-width:320px; }
   .modal h3{ margin:0 0 10px; font-family:'Jua'; }
-  .modal textarea, .modal select, .modal input{ width:100%; border:2px solid var(--line); border-radius:10px; padding:10px; font-family:'Gowun Dodum'; margin-bottom:10px; font-size:14px;}
+  .modal textarea, .modal select, .modal input{ width:100%; border:2px solid var(--line); border-radius:10px; padding:10px; font-family:'Pyeojin Gothic'; margin-bottom:10px; font-size:14px;}
   .loc-search-results{ max-height:180px; overflow-y:auto; border:2px solid var(--line); border-radius:10px; margin:-4px 0 10px; }
   .loc-result-item{ padding:11px 12px; font-size:14px; cursor:pointer; border-bottom:1px solid var(--line); }
   .loc-result-item:last-child{ border-bottom:none; }
   .loc-result-item:hover, .loc-result-item:active{ background:#FFEFE7; }
   .modal-btns{ display:flex; gap:8px; margin-top:6px; }
-  .modal-btns button{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Gowun Dodum'; font-weight:700; cursor:pointer; }
+  .modal-btns button{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Pyeojin Gothic'; font-weight:700; cursor:pointer; }
   .btn-cancel{ background:var(--line); color:var(--ink-soft); }
   .btn-confirm{ background:var(--peach-deep); color:white; }
   .acc-row{ background:var(--card); border-radius:16px; padding:16px; margin-bottom:8px; font-size:14px; }
