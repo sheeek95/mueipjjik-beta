@@ -79,7 +79,7 @@ export async function onRequestPost(context) {
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      const result = await env.AI.run(VISION_MODEL, {
+      const result = await runAI(env, VISION_MODEL, {
         image: Array.from(bytes),
         prompt: `${systemPrompt}\n\n사용자: ${userText}`,
         max_tokens: MAX_TOKENS,
@@ -88,7 +88,7 @@ export async function onRequestPost(context) {
       reply = result && result.response;
       if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
     } else {
-      const result = await env.AI.run(TEXT_MODEL, {
+      const result = await runAI(env, TEXT_MODEL, {
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userText },
@@ -103,6 +103,26 @@ export async function onRequestPost(context) {
     return jsonResponse({ reply });
   } catch (err) {
     return jsonResponse({ error: '서버 오류가 발생했어요.', debug: String((err && err.stack) || err) }, 500);
+  }
+}
+
+// Meta의 일부 모델(Llama 3.2 등)은 계정에서 최초 1회 라이선스 동의가 필요함
+// (AiError 5016: "User has not agreed to Llama3.2 model terms"). 대시보드 클릭이 아니라
+// prompt:"agree" 요청을 한 번 보내는 방식이라, 실패하면 자동으로 동의 요청 후 재시도함.
+async function runAI(env, model, input) {
+  try {
+    return await env.AI.run(model, input);
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    if (msg.includes('5016') || /agree/i.test(msg)) {
+      try {
+        await env.AI.run(model, { prompt: 'agree' });
+      } catch (e2) {
+        // 동의 요청 자체가 실패해도 아래에서 원래 에러를 다시 시도해서 판단함
+      }
+      return await env.AI.run(model, input); // 재시도. 여기서 또 실패하면 그대로 위로 던져짐
+    }
+    throw err;
   }
 }
 

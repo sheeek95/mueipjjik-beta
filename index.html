@@ -126,7 +126,8 @@
   .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; cursor:pointer; border:2px solid transparent; transition:.15s; }
   .item-tag.picked{ border-color:#B45A34; background:#FFE1D0; font-weight:700; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
-  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700;}
+  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; border:2px solid transparent; transition:.15s; }
+  .extra-tag.picked{ border-color:var(--sage-deep); background:#DCEED2; }
 
   .product-section{ display:none; margin:0 0 16px; }
   .product-section.show{ display:block; }
@@ -808,7 +809,7 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
 
   document.getElementById('outfitItems').innerHTML =
     pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
-    extraTags.map(i=>`<div class="extra-tag">+ ${i}</div>`).join('');
+    extraTags.map(i=>`<div class="extra-tag" data-item="${escapeHtml(i)}">+ ${i}</div>`).join('');
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
   let tipMsg = `오늘 체감 ${feel}℃! ${pieces[0]} 위주로 챙겨입어~`;
@@ -823,11 +824,11 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
   renderNotis();
 
   document.getElementById('productSectionTitle').textContent = '실제 코디템 추천';
-  document.querySelectorAll('#outfitItems .item-tag').forEach(t=>t.classList.remove('picked'));
+  document.querySelectorAll('#outfitItems .item-tag, #outfitItems .extra-tag').forEach(t=>t.classList.remove('picked'));
   fetchAndRenderProducts(pieces.slice(0,2), {feel, isRain, isSnow, style:state.style});
 }
 function showProductsForItem(itemName, el){
-  document.querySelectorAll('#outfitItems .item-tag').forEach(t=>t.classList.remove('picked'));
+  document.querySelectorAll('#outfitItems .item-tag, #outfitItems .extra-tag').forEach(t=>t.classList.remove('picked'));
   if(el) el.classList.add('picked');
   document.getElementById('productSectionTitle').textContent = `'${itemName}' 관련 코디템`;
   const w = state.lastWeather;
@@ -1157,7 +1158,7 @@ function renderNotis(){
 }
 
 document.getElementById('outfitItems').addEventListener('click', (e)=>{
-  const tag = e.target.closest('.item-tag');
+  const tag = e.target.closest('.item-tag, .extra-tag');
   if(!tag) return;
   showProductsForItem(tag.dataset.item, tag);
 });

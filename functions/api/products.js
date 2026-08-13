@@ -23,7 +23,7 @@ export async function onRequestPost(context) {
     }
 
     if (!(await checkRateLimit(env, request, 'rlp', DAILY_LIMIT_PER_IP))) {
-      return jsonResponse({ groups: [] }, 429);
+      return jsonResponse({ groups: [], debug: 'IP당 하루 요청 한도 초과 (RATE_LIMIT_KV)' }, 429);
     }
 
     const items = Array.isArray(body && body.items) ? body.items.filter((v) => typeof v === 'string').slice(0, MAX_ITEMS) : [];
@@ -32,10 +32,11 @@ export async function onRequestPost(context) {
     }
 
     const baseParts = weatherQueryParts(body && body.weather);
+    const debugSink = [];
 
     const groups = await Promise.all(items.map(async (item) => {
       const query = [...baseParts, item].join(' ');
-      const results = await searchNaverShop(env, query, PRODUCTS_PER_ITEM);
+      const results = await searchNaverShop(env, query, PRODUCTS_PER_ITEM, debugSink);
       return {
         tag: item,
         products: results.map((r) => ({
@@ -48,8 +49,12 @@ export async function onRequestPost(context) {
       };
     }));
 
-    return jsonResponse({ groups: groups.filter((g) => g.products.length) });
+    const filtered = groups.filter((g) => g.products.length);
+    const responseBody = { groups: filtered };
+    // 상품이 하나도 없을 때만 실패 원인을 같이 보내줌 (정상적으로 검색 결과가 없는 경우와 구분하기 위함)
+    if (!filtered.length && debugSink.length) responseBody.debug = debugSink;
+    return jsonResponse(responseBody);
   } catch (err) {
-    return jsonResponse({ groups: [] }, 200);
+    return jsonResponse({ groups: [], debug: String((err && err.stack) || err) }, 200);
   }
 }
