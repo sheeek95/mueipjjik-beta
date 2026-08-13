@@ -12,7 +12,7 @@
 // 선택 사항 (있으면 자동으로 사용됨, 없어도 동작함):
 //   Settings > Functions > KV namespace bindings 에서 RATE_LIMIT_KV 라는 이름으로 KV 네임스페이스 연결
 //   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (한 사람이 하루 무료 뉴런 할당량을 다 쓰는 것 방지)
-//   Settings > Environment variables 에서 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 추가 (developers.naver.com, 무료)
+//   Settings > Environment variables 에서 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 추가 (ncloud.com "NAVER API HUB", 무료)
 //   -> 연결하면 오늘 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품을 검색해 핏치 답변에 참고자료로 녹여줌
 //   Settings > Environment variables 에서 YOUTUBE_API_KEY 추가 (Google Cloud Console, 무료, 카드 불필요)
 //   -> 연결하면 요즘 패션 유튜버들의 계절별 영상 제목/설명을 핏치 답변 참고자료로 녹여줌 (영상 자체는 화면에 노출 안 함)

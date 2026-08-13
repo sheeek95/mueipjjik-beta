@@ -39,7 +39,7 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 모두 링크나 글 제목을 그대로 나열하지 않고 핏치 스타일로 자연스럽게 답변에 녹이도록 지시해뒀어요.
 
 발급 방법:
-1. **네이버**: [developers.naver.com](https://developers.naver.com) 로그인 > Application 등록 > 사용 API에서 "검색" 선택 (블로그, 쇼핑 검색이 포함돼 있는지 확인 — 없으면 애플리케이션 수정에서 추가) > 발급된 Client ID / Client Secret을 Cloudflare Pages 환경변수에 등록
+1. **네이버**: 네이버가 검색/검색어트렌드/쇼핑인사이트 API를 **NAVER API HUB**(NCP 산하)로 이관해서, 지금은 [ncloud.com의 NAVER API HUB](https://www.ncloud.com/product/applicationService/naverApiHub)에서 발급받아야 해요 (developers.naver.com 아님). 로그인 > 이용 신청 > 사용할 API에서 "검색" 선택 (블로그, 쇼핑 검색이 포함돼 있는지 확인) > 발급된 Client ID / Client Secret을 Cloudflare Pages 환경변수 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`에 등록. (코드는 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY` 헤더로 `https://naverapihub.apigw.ntruss.com/search/v1/...` 엔드포인트를 호출해요.)
 2. **YouTube**: [Google Cloud Console](https://console.cloud.google.com) 로그인 > 프로젝트 생성 > API 라이브러리에서 "YouTube Data API v3" 활성화 > 사용자 인증 정보 > API 키 생성 (카드 등록 불필요, 약 5분 소요) > 발급된 키를 `YOUTUBE_API_KEY`로 Cloudflare Pages 환경변수에 등록
 
 설정하지 않아도 서비스는 정상 동작해요 (이 경우 트렌드/상품 카드 없이 기본 추천만 보여줘요).
