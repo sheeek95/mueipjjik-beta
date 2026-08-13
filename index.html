@@ -11,11 +11,11 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
 <style>
   /* 본문 폰트: 펴진고딕(PyeojinGothic, SIL OFL 라이선스 — 상업적 이용/재배포 무료) 자체 호스팅.
-     헤더/타이틀(.display)은 기존 Jua(구글 폰트)를 그대로 유지. */
+     헤더/타이틀 등 손글씨 느낌이 필요한 곳(.display)은 그리운 프롬솔(Griun Fromsol,
+     그리운 상업용 무료 폰트 — 모든 용도 자유 이용 가능, 폰트파일 개작/수정/재판매만 금지) 자체 호스팅.
+     구글 폰트(Jua) 의존은 제거함. */
   @font-face{
     font-family:'Pyeojin Gothic';
     src:url('/fonts/PyeojinGothic-Regular.woff2') format('woff2');
@@ -25,6 +25,11 @@
     font-family:'Pyeojin Gothic';
     src:url('/fonts/PyeojinGothic-Bold.woff2') format('woff2');
     font-weight:700; font-style:normal; font-display:swap;
+  }
+  @font-face{
+    font-family:'Griun Fromsol';
+    src:url('/fonts/GriunFromsol-Regular.woff2') format('woff2');
+    font-weight:400; font-style:normal; font-display:swap;
   }
   :root{
     --bg:#FFF7EE;
@@ -47,7 +52,7 @@
     display:flex; justify-content:center;
     height:100vh; height:100dvh;
   }
-  .display{font-family:'Jua',sans-serif;}
+  .display{font-family:'Griun Fromsol',sans-serif;}
   #frame{
     width:100%; max-width:420px; height:100vh; height:100dvh; background:var(--bg); position:relative;
     display:flex; flex-direction:column; overflow:hidden; box-shadow:0 0 40px rgba(0,0,0,0.08);
@@ -81,7 +86,7 @@
   }
   .primary-btn{
     width:100%; max-width:280px; padding:15px; border-radius:14px; border:none; background:var(--peach-deep);
-    color:white; font-family:'Jua'; font-size:16px; cursor:pointer; margin-top:6px;
+    color:white; font-family:'Griun Fromsol'; font-size:16px; cursor:pointer; margin-top:6px;
   }
   .primary-btn:disabled{ background:#E8DCCF; color:#B5A79C; cursor:not-allowed; }
   .ghost-btn{ background:none; border:none; color:var(--ink-soft); font-size:13px; text-decoration:underline; cursor:pointer; margin-top:4px;}
@@ -97,7 +102,7 @@
   }
   .wc-top{ display:flex; align-items:center; justify-content:space-between; }
   .wc-loc{ font-size:14px; color:#3A5E68; font-weight:700; display:flex; align-items:center; gap:4px;}
-  .wc-temp{ font-size:52px; font-family:'Jua'; line-height:1; margin:6px 0 0; color:#2C4A52;}
+  .wc-temp{ font-size:52px; font-family:'Griun Fromsol'; line-height:1; margin:6px 0 0; color:#2C4A52;}
   .wc-feel{ font-size:13px; color:#4E7178; }
   .wc-emoji{ font-size:54px; position:absolute; right:18px; top:14px; }
   .wc-stats{ display:flex; gap:14px; margin-top:14px; }
@@ -122,7 +127,7 @@
   .fairy-bubble p{ margin:2px 0 0; font-size:14px; line-height:1.5; }
   .fairy-bubble .name{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:2px; }
 
-  .section-title{ padding:0 20px; font-family:'Jua'; font-size:17px; margin:0 0 8px; }
+  .section-title{ padding:0 20px; font-family:'Griun Fromsol'; font-size:17px; margin:0 0 8px; }
   .style-scroll{ display:flex; gap:8px; padding:0 20px 4px; overflow-x:auto; margin-bottom:16px; }
   .style-chip{
     flex-shrink:0; padding:9px 16px; border-radius:999px; background:var(--card); border:2px solid var(--line);
@@ -180,7 +185,7 @@
 
   /* ---------- settings ---------- */
   .set-section{ margin:6px 20px 18px; }
-  .set-h{ font-family:'Jua'; font-size:15px; margin-bottom:8px; }
+  .set-h{ font-family:'Griun Fromsol'; font-size:15px; margin-bottom:8px; }
   .set-row{
     background:var(--card); border-radius:16px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between;
     margin-bottom:8px; font-size:14px; cursor:pointer;
@@ -204,7 +209,7 @@
   .modal-bg{ position:absolute; inset:0; background:rgba(0,0,0,0.4); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
   .modal-bg.active{ display:flex; }
   .modal{ background:var(--card); border-radius:20px; padding:22px; width:100%; max-width:320px; }
-  .modal h3{ margin:0 0 10px; font-family:'Jua'; }
+  .modal h3{ margin:0 0 10px; font-family:'Griun Fromsol'; }
   .modal textarea, .modal select, .modal input{ width:100%; border:2px solid var(--line); border-radius:10px; padding:10px; font-family:'Pyeojin Gothic'; margin-bottom:10px; font-size:14px;}
   .loc-search-results{ max-height:180px; overflow-y:auto; border:2px solid var(--line); border-radius:10px; margin:-4px 0 10px; }
   .loc-result-item{ padding:11px 12px; font-size:14px; cursor:pointer; border-bottom:1px solid var(--line); }
@@ -229,7 +234,7 @@
     border-top:1px solid var(--line);
   }
   #bottomnav.show{ display:flex; }
-  .nav-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--ink-soft); cursor:pointer; }
+  .nav-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--ink-soft); cursor:pointer; font-family:'Pyeojin Gothic'; }
   .nav-btn.active{ color:var(--peach-deep); font-weight:700; }
   .nav-btn span.ic{ font-size:20px; }
   ::-webkit-scrollbar{ display:none; }
