@@ -92,6 +92,16 @@
   .wc-stat{ background:rgba(255,255,255,0.55); border-radius:12px; padding:8px 12px; font-size:12px; color:#2C4A52;}
   .wc-stat b{ display:block; font-size:15px; }
 
+  .hourly-scroll{ display:flex; gap:8px; padding:0 20px 4px; overflow-x:auto; margin:0 0 16px; }
+  .hourly-item{
+    flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:52px;
+    background:var(--card); border-radius:14px; padding:10px 8px; box-shadow:0 2px 8px rgba(0,0,0,0.04);
+  }
+  .hourly-item .h-time{ font-size:11px; color:var(--ink-soft); white-space:nowrap; }
+  .hourly-item .h-emoji{ font-size:19px; }
+  .hourly-item .h-temp{ font-size:14px; font-weight:700; }
+  .hourly-item .h-rain{ font-size:10px; color:var(--sky-deep); }
+
   .fairy-bubble{
     margin:0 20px 16px; background:var(--card); border-radius:20px; padding:14px 16px; display:flex; gap:12px;
     align-items:flex-start; box-shadow:0 2px 10px rgba(0,0,0,0.04);
@@ -183,6 +193,10 @@
   .modal{ background:var(--card); border-radius:20px; padding:22px; width:100%; max-width:320px; }
   .modal h3{ margin:0 0 10px; font-family:'Jua'; }
   .modal textarea, .modal select, .modal input{ width:100%; border:2px solid var(--line); border-radius:10px; padding:10px; font-family:'Gowun Dodum'; margin-bottom:10px; font-size:14px;}
+  .loc-search-results{ max-height:180px; overflow-y:auto; border:2px solid var(--line); border-radius:10px; margin:-4px 0 10px; }
+  .loc-result-item{ padding:11px 12px; font-size:14px; cursor:pointer; border-bottom:1px solid var(--line); }
+  .loc-result-item:last-child{ border-bottom:none; }
+  .loc-result-item:hover, .loc-result-item:active{ background:#FFEFE7; }
   .modal-btns{ display:flex; gap:8px; margin-top:6px; }
   .modal-btns button{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Gowun Dodum'; font-weight:700; cursor:pointer; }
   .btn-cancel{ background:var(--line); color:var(--ink-soft); }
@@ -326,6 +340,8 @@
       </div>
     </div>
 
+    <div class="hourly-scroll" id="hourlyScroll"></div>
+
     <div class="fairy-bubble">
       <svg class="fairy-avatar" viewBox="0 0 100 100" role="img" aria-label="핏치">
         <circle cx="50" cy="50" r="49" fill="#FFE8D6"/>
@@ -437,8 +453,9 @@
     <div class="modal">
       <h3>위치 추가</h3>
       <input type="text" id="newLocName" placeholder="예: 부산, 제주">
+      <div id="locSearchResults" class="loc-search-results" style="display:none;"></div>
       <p id="addLocError" style="display:none; color:var(--danger); font-size:12px; margin:-4px 0 8px;">위치를 찾지 못했어. 다른 이름으로 시도해줘.</p>
-      <div class="modal-btns"><button class="btn-cancel" onclick="closeModal('addLoc')">취소</button><button class="btn-confirm" onclick="addLocation()">추가</button></div>
+      <div class="modal-btns"><button class="btn-cancel" onclick="closeModal('addLoc')">취소</button><button class="btn-confirm" onclick="searchLocations()">검색</button></div>
     </div>
   </div>
 
@@ -602,7 +619,7 @@ function requestLocation(){
 async function fetchWeather(){
   try{
     const {lat,lon} = state.loc;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=precipitation_probability&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=2&timezone=auto`;
     const res = await fetch(url);
     const data = await res.json();
     const cur = data.current;
@@ -621,12 +638,43 @@ async function fetchWeather(){
     document.getElementById('wxHumid').textContent = cur.relative_humidity_2m + '%';
     document.getElementById('wxWind').textContent = windSpeed + ' km/h';
 
+    renderHourly(data.hourly, cur.time);
+
     state.lastWeather = {feel, rainProb, windSpeed, wcode};
     renderOutfit(feel, rainProb, windSpeed, wcode);
   }catch(e){
     document.getElementById('wxDesc').textContent = '날씨 정보를 불러오지 못했어';
     document.getElementById('fairyTip').textContent = '앗, 날씨 정보를 가져오는 데 문제가 생겼어. 네트워크를 확인해줘!';
   }
+}
+
+/* =============== 시간별 날씨 캐러셀 (확인 시점부터 최대 24시간) =============== */
+function hourLabel(isoStr, isNow){
+  if(isNow) return '지금';
+  const hour = parseInt(isoStr.split('T')[1].split(':')[0], 10);
+  const ampm = hour<12 ? '오전' : '오후';
+  let h12 = hour % 12; if(h12===0) h12 = 12;
+  return `${ampm} ${h12}시`;
+}
+function renderHourly(hourly, nowIso){
+  const wrap = document.getElementById('hourlyScroll');
+  if(!wrap || !hourly || !Array.isArray(hourly.time)) return;
+  // 현재 시각(지역 기준) 이후 시간대만, 최대 24개(24시간)까지만 노출
+  let startIdx = hourly.time.findIndex(t => t >= nowIso);
+  if(startIdx < 0) startIdx = 0;
+  const slice = hourly.time.slice(startIdx, startIdx+24);
+  wrap.innerHTML = slice.map((t,i)=>{
+    const idx = startIdx+i;
+    const temp = Math.round(hourly.temperature_2m[idx]);
+    const [emoji] = WMO[hourly.weather_code[idx]] || ['⛅',''];
+    const rain = hourly.precipitation_probability ? hourly.precipitation_probability[idx] : null;
+    return `<div class="hourly-item">
+      <div class="h-time">${hourLabel(t, i===0)}</div>
+      <div class="h-emoji">${emoji}</div>
+      <div class="h-temp">${temp}°</div>
+      ${rain!=null && rain>0 ? `<div class="h-rain">💧${rain}%</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 /* =============== OUTFIT RECOMMENDATION =============== */
@@ -1005,7 +1053,11 @@ function removeLocation(idx){
 }
 function openModal(name){
   document.getElementById('modal-'+name).classList.add('active');
-  if(name==='addLoc') document.getElementById('addLocError').style.display = 'none';
+  if(name==='addLoc'){
+    document.getElementById('addLocError').style.display = 'none';
+    document.getElementById('locSearchResults').style.display = 'none';
+    document.getElementById('locSearchResults').innerHTML = '';
+  }
   if(name==='gender'){
     const cur = state.gender || '선택안함';
     document.querySelectorAll('#genderChipRow .chip').forEach(c=>c.classList.toggle('selected', c.dataset.v===cur));
@@ -1015,26 +1067,41 @@ function openModal(name){
   }
 }
 function closeModal(name){ document.getElementById('modal-'+name).classList.remove('active'); }
-async function addLocation(){
+let locCandidates = [];
+async function searchLocations(){
   const name = document.getElementById('newLocName').value.trim();
   const errEl = document.getElementById('addLocError');
+  const resultsEl = document.getElementById('locSearchResults');
   errEl.style.display = 'none';
+  resultsEl.style.display = 'none';
+  resultsEl.innerHTML = '';
   if(!name) return;
   try{
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ko`);
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=ko`);
     const data = await res.json();
-    if(!data.results || !data.results[0]){
+    if(!data.results || !data.results.length){
       errEl.style.display = 'block';
       return;
     }
-    const r = data.results[0];
-    const label = [r.name, r.admin1].filter((v,i,arr)=>v && arr.indexOf(v)===i).join(', ');
-    state.extraLocs.push({name:label, lat:r.latitude, lon:r.longitude});
+    // 동네 이름이 같아도 구분되도록 시/군/구(admin2)까지 라벨에 포함
+    locCandidates = data.results.map(r => ({
+      name: [r.name, r.admin2, r.admin1].filter((v,i,arr)=>v && arr.indexOf(v)===i).join(', '),
+      lat: r.latitude, lon: r.longitude
+    }));
+    resultsEl.innerHTML = locCandidates.map((c,i)=>`<div class="loc-result-item" onclick="selectLocationCandidate(${i})">📍 ${escapeHtml(c.name)}</div>`).join('');
+    resultsEl.style.display = 'block';
   }catch(e){
     errEl.style.display = 'block';
-    return;
   }
-  document.getElementById('newLocName').value='';
+}
+function selectLocationCandidate(i){
+  const c = locCandidates[i];
+  if(!c) return;
+  state.extraLocs.push({name:c.name, lat:c.lat, lon:c.lon});
+  document.getElementById('newLocName').value = '';
+  document.getElementById('locSearchResults').style.display = 'none';
+  document.getElementById('locSearchResults').innerHTML = '';
+  locCandidates = [];
   renderLocList();
   saveState();
   closeModal('addLoc');
@@ -1106,7 +1173,7 @@ function onEnterKey(inputId, action){
   });
 }
 onEnterKey('chatInputText', sendChat);
-onEnterKey('newLocName', addLocation);
+onEnterKey('newLocName', searchLocations);
 onEnterKey('settingsHeightInput', saveSettingsHeight);
 onEnterKey('heightInput', ()=>{ if(!document.getElementById('btn-step2').disabled) goStep(3); });
 
