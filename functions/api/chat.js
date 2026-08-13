@@ -154,15 +154,17 @@ function safeStringify(obj) {
 
 // 프론트에서 이미 (기온대 x 스타일)로 계산해서 보낸 실제 추천 아이템을 "정답"으로 프롬프트에 박아넣음.
 // 모델이 스스로 옷차림을 지어내지 않고, 이미 정해진 조합을 자연스럽게 설명하게 하기 위함.
+// (채팅 화면의 스타일 선택지를 눌렀을 때만 items가 채워져서 넘어옴 — 자유 채팅에서는 특정 코디를
+// 강제로 언급하지 않도록 비워서 보냄. "홈 화면" 같은 화면 UI 얘기는 하지 않게 문구에서 뺐음.)
 function buildOutfitFact(weather) {
   if (!weather || !Array.isArray(weather.items) || !weather.items.length) return '';
-  const bits = [`[오늘 홈 화면에 떠 있는 추천 코디] ${weather.items.join(', ')}`];
+  const bits = [`[추천 코디] ${weather.items.join(', ')}`];
   if (weather.shoe) bits.push(`신발: ${weather.shoe}`);
   if (weather.style) bits.push(`스타일: ${weather.style}`);
   return (
     `\n\n${bits.join(' / ')}\n` +
-    '사용자가 오늘 코디에 대해 물어보면 이 조합을 그대로 언급해. ' +
-    '하지만 사용자가 다른 스타일이나 다른 조합을 원한다고 하면, 이 조합에 얽매이지 말고 날씨와 계절에 어울리는 새로운 아이템 조합을 자유롭게 새로 제안해.'
+    '사용자가 방금 이 스타일의 코디를 요청했으니, 화면 얘기(홈, 어디에 떠 있다 등)는 하지 말고 ' +
+    '이 조합을 자연스럽게 설명하면서 추천해.'
   );
 }
 

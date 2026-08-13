@@ -134,6 +134,9 @@
     font-size:13px; cursor:pointer; white-space:nowrap;
   }
   .style-chip.selected{ background:var(--sage); border-color:var(--sage-deep); color:#2E4E22; font-weight:700; }
+  .chat-style-picker{ padding:12px 16px 4px; border-bottom:1px solid var(--line); }
+  .chat-style-label{ font-size:12px; color:var(--ink-soft); margin-bottom:8px; }
+  .chat-style-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
 
   .outfit-card{
     margin:0 20px 16px; background:var(--card); border-radius:20px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,0.04);
@@ -384,6 +387,16 @@
     </div>
 
     <div id="chatCoachView" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+      <div class="chat-style-picker">
+        <div class="chat-style-label">어떤 스타일이 궁금해? 골라주면 그 스타일로 코디를 추천해줄게</div>
+        <div class="chat-style-row">
+          <div class="style-chip" onclick="pickChatStyle('캐주얼')">캐주얼</div>
+          <div class="style-chip" onclick="pickChatStyle('로맨틱')">로맨틱</div>
+          <div class="style-chip" onclick="pickChatStyle('미니멀')">미니멀</div>
+          <div class="style-chip" onclick="pickChatStyle('포멀')">포멀</div>
+          <div class="style-chip" onclick="pickChatStyle('스트릿')">스트릿</div>
+        </div>
+      </div>
       <div class="chat-body" id="chatBody"></div>
       <div class="chat-input-bar">
         <button class="round-btn" onclick="document.getElementById('imgUpload').click()">📷</button>
@@ -848,18 +861,17 @@ async function callFitchAI(userContent, weatherCtx, history){
   if(!res.ok) throw new Error(data.error || 'API 오류');
   return data.reply;
 }
+// 자유 채팅에서는 날씨만 참고하고 특정 코디를 강제로 언급하게 하지 않음(스타일 선택지에서 고른
+// 경우에만 구체적 코디를 알려줌 — pickChatStyle 참고)
 function currentWeatherCtx(){
   if(!state.lastWeather) return null;
   const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
-  const {pieces} = getOutfitPieces(feel, state.style);
   return {
     feel,
     isRain: RAIN_CODES.has(wcode) || rainProb>=50,
     isSnow: SNOW_CODES.has(wcode),
     windSpeed,
-    style: state.style,
-    items: pieces, // 채팅 백엔드가 "오늘의 추천 코디" 사실로 그대로 언급하도록 전체 아이템을 보냄
-    shoe: (STYLE_FLAVOR[state.style] || {}).extra
+    style: state.style
   };
 }
 
@@ -892,6 +904,23 @@ function onImagePicked(e){
   reader.onload = ()=>{ pendingImage = reader.result; sendChat(); };
   reader.readAsDataURL(file);
 }
+// 로딩 표시 + AI 호출 + 대화 기록 갱신까지 공통 처리 (자유 채팅/스타일 선택지 둘 다 이걸 씀)
+async function sendChatTurn(content, weatherCtx, historyLabel){
+  addBotMsg('음... 잠깐만, 살펴보고 있어 🐹💭');
+  const body = document.getElementById('chatBody');
+  const loadingRow = body.lastElementChild;
+  try{
+    const reply = await callFitchAI(content, weatherCtx, chatHistory);
+    loadingRow.remove();
+    addBotMsg(reply);
+    chatHistory.push({role:'user', content: historyLabel});
+    chatHistory.push({role:'assistant', content: reply});
+    if(chatHistory.length > 6) chatHistory = chatHistory.slice(-6);
+  }catch(err){
+    loadingRow.remove();
+    addBotMsg('앗, 지금 답변을 가져오지 못했어 😥 잠시 후 다시 시도해줄래?');
+  }
+}
 async function sendChat(){
   const input = document.getElementById('chatInputText');
   const text = input.value.trim();
@@ -899,29 +928,37 @@ async function sendChat(){
   if(!text && !img) return;
   addUserMsg(text, img);
   input.value=''; pendingImage=null;
-  addBotMsg('음... 잠깐만, 살펴보고 있어 🐹💭');
-  const body = document.getElementById('chatBody');
-  const loadingRow = body.lastElementChild;
-  try{
-    const content = [];
-    if(text) content.push({type:'text', text: text});
-    else content.push({type:'text', text:'이 코디 어때? 색조합이랑 핏 좀 봐줘.'});
-    if(img){
-      const base64 = img.split(',')[1];
-      const mime = img.substring(5, img.indexOf(';'));
-      content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
-    }
-    const weatherCtx = currentWeatherCtx();
-    const reply = await callFitchAI(content, weatherCtx, chatHistory);
-    loadingRow.remove();
-    addBotMsg(reply);
-    chatHistory.push({role:'user', content: text || '[사진 첨부]'});
-    chatHistory.push({role:'assistant', content: reply});
-    if(chatHistory.length > 6) chatHistory = chatHistory.slice(-6);
-  }catch(err){
-    loadingRow.remove();
-    addBotMsg('앗, 지금 답변을 가져오지 못했어 😥 잠시 후 다시 시도해줄래?');
+  const content = [];
+  if(text) content.push({type:'text', text: text});
+  else content.push({type:'text', text:'이 코디 어때? 색조합이랑 핏 좀 봐줘.'});
+  if(img){
+    const base64 = img.split(',')[1];
+    const mime = img.substring(5, img.indexOf(';'));
+    content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
   }
+  await sendChatTurn(content, currentWeatherCtx(), text || '[사진 첨부]');
+}
+// 채팅 화면의 스타일 선택지를 누르면, 그 스타일로 지금 날씨에 맞는 코디를 새로 계산해서
+// (홈 화면에 지금 떠 있는 스타일과 무관하게) 그 코디를 바로 물어봄
+function pickChatStyle(style){
+  if(!state.lastWeather){
+    addBotMsg('아직 오늘 날씨를 불러오는 중이야! 잠깐 기다렸다가 다시 눌러줄래? 🐹');
+    return;
+  }
+  const {feel, rainProb, windSpeed, wcode} = state.lastWeather;
+  const {pieces} = getOutfitPieces(feel, style);
+  const weatherCtx = {
+    feel,
+    isRain: RAIN_CODES.has(wcode) || rainProb>=50,
+    isSnow: SNOW_CODES.has(wcode),
+    windSpeed,
+    style,
+    items: pieces,
+    shoe: (STYLE_FLAVOR[style] || {}).extra
+  };
+  const text = `${style} 스타일 코디 추천해줘`;
+  addUserMsg(text);
+  sendChatTurn([{type:'text', text}], weatherCtx, text);
 }
 
 /* =============== CHAT: FIT TAB =============== */
