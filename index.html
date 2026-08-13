@@ -140,31 +140,15 @@
   }
   .outfit-tier{ font-size:12px; color:var(--peach-deep); font-weight:700; margin-bottom:4px; }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; cursor:pointer; border:2px solid transparent; transition:.15s; }
-  .item-tag.picked{ border-color:#B45A34; background:#FFE1D0; font-weight:700; }
+  .item-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
-  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700; cursor:pointer; border:2px solid transparent; transition:.15s; }
-  .extra-tag.picked{ border-color:var(--sage-deep); background:#DCEED2; }
-
-  .product-section{ display:none; margin:0 0 16px; }
-  .product-section.show{ display:block; }
-  .product-scroll{ display:flex; gap:10px; padding:0 20px 4px; overflow-x:auto; }
-  .product-card{
-    flex-shrink:0; width:128px; background:var(--card); border-radius:16px; overflow:hidden;
-    box-shadow:0 2px 10px rgba(0,0,0,0.04); text-decoration:none; color:var(--ink); display:block;
-  }
-  .product-card img{ width:128px; height:128px; object-fit:cover; background:var(--line); display:block; }
-  .product-tag{ font-size:10px; color:var(--peach-deep); font-weight:700; padding:8px 10px 0; }
-  .product-title{ font-size:12px; padding:2px 10px; line-height:1.4; height:2.8em; overflow:hidden; }
-  .product-price{ font-size:13px; font-weight:700; padding:0 10px 10px; }
-  .product-mall{ font-size:10px; color:var(--ink-soft); padding:0 10px 10px; margin-top:-8px; }
+  .extra-tag{ background:var(--sage); color:#2E4E22; padding:7px 12px; border-radius:12px; font-size:13px; font-weight:700; }
 
   /* ---------- chat ---------- */
   .tab-row{ display:flex; margin:10px 20px 6px; background:var(--line); border-radius:14px; padding:4px; }
   .tab-btn{ flex:1; text-align:center; padding:10px; border-radius:11px; font-size:13px; cursor:pointer; font-weight:700; color:var(--ink-soft); }
   .tab-btn.active{ background:var(--card); color:var(--peach-deep); }
   .chat-body{ flex:1; overflow-y:auto; padding:10px 16px; display:flex; flex-direction:column; gap:12px; }
-  .chat-body .product-scroll{ padding:0 0 4px; margin:-6px 0 0; }
   .msg{ max-width:78%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; }
   .msg.bot{ background:var(--card); align-self:flex-start; border-bottom-left-radius:4px; box-shadow:0 1px 6px rgba(0,0,0,0.04);}
   .msg.user{ background:var(--peach-deep); color:white; align-self:flex-end; border-bottom-right-radius:4px; }
@@ -389,11 +373,6 @@
       <div class="outfit-items" id="outfitItems"></div>
       <div class="style-tip" id="styleTip"></div>
     </div>
-
-    <div class="product-section" id="productSection">
-      <div class="section-title display" id="productSectionTitle">실제 코디템 추천</div>
-      <div class="product-scroll" id="productScroll"></div>
-    </div>
     </div>
   </div>
 
@@ -516,7 +495,6 @@ const state = {
   activeIdx:'main',
   extraLocs:[],
   style:'캐주얼',
-  lastProductsKey:null,
   notis:[], // 날씨를 불러오면 실제 상황에 맞게 채워짐 (generateNotis 참고)
   inquiries:[],
   fitImgs:{face:null, clothes:null}
@@ -845,65 +823,9 @@ function renderOutfit(feel, rainProb, windSpeed, wcode){
 
   state.notis = generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces);
   renderNotis();
-
-  document.getElementById('productSectionTitle').textContent = '실제 코디템 추천';
-  document.querySelectorAll('#outfitItems .item-tag, #outfitItems .extra-tag').forEach(t=>t.classList.remove('picked'));
-  fetchAndRenderProducts(pieces.slice(0,2), {feel, isRain, isSnow, style:state.style});
 }
-function showProductsForItem(itemName, el){
-  document.querySelectorAll('#outfitItems .item-tag, #outfitItems .extra-tag').forEach(t=>t.classList.remove('picked'));
-  if(el) el.classList.add('picked');
-  document.getElementById('productSectionTitle').textContent = `'${itemName}' 관련 코디템`;
-  const w = state.lastWeather;
-  const weatherCtx = w ? {
-    feel: w.feel,
-    isRain: RAIN_CODES.has(w.wcode) || w.rainProb>=50,
-    isSnow: SNOW_CODES.has(w.wcode),
-    style: state.style
-  } : {style: state.style};
-  fetchAndRenderProducts([itemName], weatherCtx);
-  document.getElementById('productSection').scrollIntoView({behavior:'smooth', block:'nearest'});
-}
-
-/* =============== 실제 코디템 추천 (네이버 쇼핑 검색) =============== */
 function escapeHtml(s){
   return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-async function fetchAndRenderProducts(items, weatherCtx){
-  const key = items.join(',') + '|' + JSON.stringify(weatherCtx);
-  if(state.lastProductsKey === key) return;
-  state.lastProductsKey = key;
-  try{
-    const res = await fetch('/api/products', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items, weather: weatherCtx })
-    });
-    const data = await res.json();
-    renderProducts(data.groups || []);
-  }catch(e){
-    renderProducts([]);
-  }
-}
-function renderProducts(groups){
-  const section = document.getElementById('productSection');
-  const scroll = document.getElementById('productScroll');
-  const cards = [];
-  groups.forEach(g=>{
-    (g.products||[]).forEach(p=>{
-      if(!p.link || !/^https?:\/\//.test(p.link)) return;
-      cards.push(`
-        <a class="product-card" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">
-          <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy">
-          <div class="product-tag">${escapeHtml(g.tag)}</div>
-          <div class="product-title">${escapeHtml(p.title)}</div>
-          <div class="product-price">${p.price ? Number(p.price).toLocaleString()+'원' : ''}</div>
-          <div class="product-mall">${escapeHtml(p.mall)}</div>
-        </a>`);
-    });
-  });
-  scroll.innerHTML = cards.join('');
-  section.classList.toggle('show', cards.length>0);
 }
 
 /* =============== AI 채팅 API HELPER =============== */
@@ -990,43 +912,10 @@ async function sendChat(){
     chatHistory.push({role:'user', content: text || '[사진 첨부]'});
     chatHistory.push({role:'assistant', content: reply});
     if(chatHistory.length > 6) chatHistory = chatHistory.slice(-6);
-    if(weatherCtx) addBotProductCards(weatherCtx.items.slice(0,2), weatherCtx);
   }catch(err){
     loadingRow.remove();
     addBotMsg('앗, 지금 답변을 가져오지 못했어 😥 잠시 후 다시 시도해줄래?');
   }
-}
-async function addBotProductCards(items, weatherCtx){
-  if(!items || !items.length) return;
-  try{
-    const res = await fetch('/api/products', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items, weather: weatherCtx })
-    });
-    const data = await res.json();
-    const cards = [];
-    (data.groups||[]).forEach(g=>{
-      (g.products||[]).forEach(p=>{
-        if(!p.link || !/^https?:\/\//.test(p.link)) return;
-        cards.push(`
-          <a class="product-card" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">
-            <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy">
-            <div class="product-tag">${escapeHtml(g.tag)}</div>
-            <div class="product-title">${escapeHtml(p.title)}</div>
-            <div class="product-price">${p.price ? Number(p.price).toLocaleString()+'원' : ''}</div>
-            <div class="product-mall">${escapeHtml(p.mall)}</div>
-          </a>`);
-      });
-    });
-    if(!cards.length) return;
-    const body = document.getElementById('chatBody');
-    const wrap = document.createElement('div');
-    wrap.className = 'product-scroll';
-    wrap.innerHTML = cards.join('');
-    body.appendChild(wrap);
-    body.scrollTop = body.scrollHeight;
-  }catch(e){ /* 상품 카드 로드 실패해도 채팅 자체는 정상 동작 */ }
 }
 
 /* =============== CHAT: FIT TAB =============== */
@@ -1182,12 +1071,6 @@ function renderNotis(){
       </div>
     </div>`).join('');
 }
-
-document.getElementById('outfitItems').addEventListener('click', (e)=>{
-  const tag = e.target.closest('.item-tag, .extra-tag');
-  if(!tag) return;
-  showProductsForItem(tag.dataset.item, tag);
-});
 
 /* =============== PC: 텍스트 입력에서 엔터 키로 전송/등록 =============== */
 function onEnterKey(inputId, action){

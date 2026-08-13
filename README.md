@@ -6,9 +6,8 @@
 ```
 index.html                프론트엔드 전체 (온보딩/홈/AI채팅/설정/알림)
 functions/api/chat.js     AI 채팅 프록시 (Cloudflare Pages Function, Cloudflare Workers AI 무료 티어 사용)
-functions/api/products.js 홈 화면 "실제 코디템 추천" 카드용 네이버 쇼핑 검색 프록시
-functions/api/geocode.js   위치(동네) 검색 → 좌표 변환 프록시 (NCP Maps Geocoding, 없으면 Open-Meteo로 대체)
-lib/naver.js               네이버 검색 API(블로그/쇼핑) 헬퍼
+functions/api/geocode.js   위치(동네) 검색 → 좌표 변환 프록시 (카카오 로컬 API, 없으면 Open-Meteo로 대체)
+lib/naver.js               네이버 블로그 검색 API 헬퍼
 lib/youtube.js              YouTube Data API 헬퍼 (트렌드 검색 + 캐싱)
 lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
 ```
@@ -16,39 +15,39 @@ lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
 ## 배포: Cloudflare(Workers, Git 연동) 전용
 이 프로젝트는 **Cloudflare**에만 배포할 수 있어요. `functions/api/chat.js` 등이 Cloudflare의 서버리스 런타임에서만 동작하기 때문에, GitHub Pages 같은 순수 정적 호스팅에 올리면 AI 채팅(핏치 코디 상담)이 동작하지 않아요.
 
-Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 `npx wrangler deploy`가 자동 지정되는데, 이건 저장소 루트의 **`wrangler.jsonc`** 설정을 읽어서 배포해요. 그래서 이 저장소엔 `wrangler.jsonc`(설정)와 `worker.js`(진입점 — `/api/chat`, `/api/products`는 `functions/api/*.js`로 라우팅하고 나머지는 정적 파일로 서빙)가 포함돼 있어요. 대시보드에서 "AI" 바인딩을 따로 추가할 필요 없이 `wrangler.jsonc`의 `ai` 설정만으로 Workers AI가 동작해요.
+Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 `npx wrangler deploy`가 자동 지정되는데, 이건 저장소 루트의 **`wrangler.jsonc`** 설정을 읽어서 배포해요. 그래서 이 저장소엔 `wrangler.jsonc`(설정)와 `worker.js`(진입점 — `/api/chat`, `/api/geocode`는 `functions/api/*.js`로 라우팅하고 나머지는 정적 파일로 서빙)가 포함돼 있어요. 대시보드에서 "AI" 바인딩을 따로 추가할 필요 없이 `wrangler.jsonc`의 `ai` 설정만으로 Workers AI가 동작해요.
 
 배포 절차:
 1. Cloudflare 대시보드에서 이 저장소를 Git으로 연결 (Build command 비워둠 → 자동으로 `npx wrangler deploy` 사용)
 2. **분기 제어**에서 프로덕션 분기를 `main`으로 지정 (필요하면 "프로덕션 이외 분기에 대한 빌드"도 켜서 다른 브랜치를 미리보기로 확인 가능)
 3. (선택) 남용 방지를 위해 **설정 > 변수 및 비밀**에서 KV 네임스페이스를 만들고(대시보드 **스토리지 및 데이터베이스 > KV > Create namespace**) `RATE_LIMIT_KV`라는 이름으로 바인딩 → IP당 하루 요청 횟수 제한이 자동으로 켜져요
-4. (선택) 날씨/계절에 맞는 코디 트렌드를 핏치 답변에 반영하려면 **설정 > 변수 및 비밀**에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `YOUTUBE_API_KEY` 추가 (아래 "코디 트렌드 & 실제 상품 추천" 항목 참고)
+4. (선택) 날씨/계절에 맞는 코디 트렌드를 핏치 답변에 반영하려면 **설정 > 변수 및 비밀**에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `YOUTUBE_API_KEY` 추가 (아래 "코디 트렌드" 항목 참고)
 5. 배포 후 `/api/chat` 경로로 POST 요청이 정상 응답하는지 확인 (브라우저 개발자 도구 > Network 탭에서 `chat` 요청의 Response 확인)
 
 ⚠️ **Workers AI 모델은 예고 없이 지원 종료(deprecated)될 수 있어요.** 실제로 이 프로젝트도 배포 초기에 썼던 모델이 지원 종료되면서 AI채팅이 500 에러로 막힌 적이 있어요. 채팅이 갑자기 안 되면: 브라우저 개발자 도구(F12) > Network 탭 > `chat` 요청 클릭 > Response 탭에서 에러 메시지를 확인해보세요. `AiError ... was deprecated`처럼 나오면 `functions/api/chat.js`의 `TEXT_MODEL`(또는 `VISION_MODEL`) 값을 최신 모델 ID로 바꿔야 해요.
 
 ⚠️ 하루 10,000 뉴런은 **Cloudflare 계정 전체가 공유하는 무료 한도**예요 (대화 1건당 대략 수백 뉴런 소모). 사용자가 많아지면 하루 중간에 한도가 소진될 수 있으니, 이 경우 Workers AI 사용량 기반 유료 전환을 고려해야 해요.
 
-## 코디 트렌드 & 실제 상품 추천 (선택 기능)
+## 코디 트렌드 (선택 기능)
 아래 환경변수를 설정하면 켜져요. 전부 크롤링이 아니라 네이버/구글이 공식 제공하는 검색 API를 그대로 씀:
 
-- **`NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET`가 있으면**
-  - AI 채팅(핏치) 답변에 트렌드 반영: 채팅을 보낼 때마다 서버가 계절 + 오늘 체감온도 + 비/눈 여부 + 선택한 스타일로 **블로그 검색 API**를 호출해 상위 글 3개의 제목/요약을, 대표 옷차림 태그로 **쇼핑 검색 API**를 호출해 실제 상품 2개(이름/가격/판매처/링크)를 가져와서 핏치의 시스템 프롬프트에 참고자료로 붙여요.
-  - 홈 화면 "실제 코디템 추천" 카드: `functions/api/products.js`가 오늘 추천 옷차림 태그(예: 니트, 가디건) 상위 2개로 **쇼핑 검색 API**를 호출해서 사진/가격/판매처/구매링크가 있는 상품 카드를 보여줘요. 스타일이나 위치를 바꿔서 추천 태그가 달라질 때만 다시 조회해요(같은 조건이면 재요청 안 함).
+- **`NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET`가 있으면**: AI 채팅(핏치) 답변에 트렌드 반영 — 채팅을 보낼 때마다 서버가 계절 + 오늘 체감온도 + 비/눈 여부 + 선택한 스타일로 **블로그 검색 API**를 호출해 상위 글 3개의 제목/요약을 가져와서 핏치의 시스템 프롬프트에 참고자료로 붙여요.
 - **`YOUTUBE_API_KEY`가 있으면**: 계절 + 체감온도 + 스타일로 **YouTube Data API**를 검색해서 요즘 패션 유튜버들의 영상 제목/설명/채널명을 가져오고, 이걸 핏치의 참고자료로 붙여요. **영상이나 채널 정보는 화면에 절대 노출하지 않고**, "영상 제목·채널명을 언급하거나 시청을 권하지 말고 스타일링 아이디어만 참고해서 답하라"고 프롬프트에 명시해뒀어요. 순수하게 트렌드 파악용이에요.
 
 모두 링크나 글 제목을 그대로 나열하지 않고 핏치 스타일로 자연스럽게 답변에 녹이도록 지시해뒀어요.
 
+⚠️ **네이버 쇼핑(개별 상품) 검색은 지원하지 않아요.** 예전 developers.naver.com 시절엔 `/v1/search/shop.json`으로 사진/가격/판매처/링크가 있는 실제 상품을 검색할 수 있었는데, **NAVER API HUB로 이관되면서 이 기능 자체가 빠졌어요.** 공식 문서 기준 API HUB의 검색 API는 뉴스·블로그·지역·지식iN·책·카페·백과사전·이미지·전문자료·웹문서만 제공하고, 쇼핑 관련해서는 개별 상품이 아닌 집계 통계인 "쇼핑인사이트"만 있어요. 그래서 이 앱은 "실제 상품 카드" 기능 없이 코디 추천(옷차림 태그)과 블로그/유튜브 트렌드 참고까지만 제공해요.
+
 발급 방법:
-1. **네이버**: 네이버가 검색/검색어트렌드/쇼핑인사이트 API를 **NAVER API HUB**(NCP 산하)로 이관해서, 지금은 [ncloud.com의 NAVER API HUB](https://www.ncloud.com/product/applicationService/naverApiHub)에서 발급받아야 해요 (developers.naver.com 아님). 로그인 > 이용 신청 > 사용할 API에서 "검색" 선택 (블로그, 쇼핑 검색이 포함돼 있는지 확인) > 발급된 Client ID / Client Secret을 Cloudflare Pages 환경변수 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`에 등록. (코드는 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY` 헤더로 `https://naverapihub.apigw.ntruss.com/search/v1/...` 엔드포인트를 호출해요.)
+1. **네이버**: 네이버가 검색/검색어트렌드/쇼핑인사이트 API를 **NAVER API HUB**(NCP 산하)로 이관해서, 지금은 [ncloud.com의 NAVER API HUB](https://www.ncloud.com/product/applicationService/naverApiHub)에서 발급받아야 해요 (developers.naver.com 아님). 로그인 > 이용 신청 > 사용할 API에서 "검색 > 블로그" 선택 > 발급된 Client ID / Client Secret을 Cloudflare Pages 환경변수 `NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`에 등록. (코드는 `X-NCP-APIGW-API-KEY-ID`/`X-NCP-APIGW-API-KEY` 헤더로 `https://naverapihub.apigw.ntruss.com/search/v1/...` 엔드포인트를 호출해요.)
 2. **YouTube**: [Google Cloud Console](https://console.cloud.google.com) 로그인 > 프로젝트 생성 > API 라이브러리에서 "YouTube Data API v3" 활성화 > 사용자 인증 정보 > API 키 생성 (카드 등록 불필요, 약 5분 소요) > 발급된 키를 `YOUTUBE_API_KEY`로 Cloudflare Pages 환경변수에 등록
 
-설정하지 않아도 서비스는 정상 동작해요 (이 경우 트렌드/상품 카드 없이 기본 추천만 보여줘요).
+설정하지 않아도 서비스는 정상 동작해요 (이 경우 트렌드 참고 없이 기본 추천만 보여줘요).
 
 ⚠️ 할당량 안내:
 - 네이버 검색 API: 애플리케이션당 하루 25,000건 무료
 - YouTube Data API: 프로젝트당 하루 10,000 unit 무료인데, 검색(`search.list`) 1회가 100 unit이라 **실질적으로 하루 최대 약 100회 검색**밖에 못 해요. 그래서 `RATE_LIMIT_KV`가 연결돼 있으면 같은 날씨 조건의 검색 결과를 6시간 동안 캐싱해서 실제 호출 수를 크게 줄여요(사용자가 많아도 같은 계절/기온대면 캐시를 재사용).
-- 채팅·상품 조회 모두 `RATE_LIMIT_KV`로 IP당 요청 수를 제한해서 위 한도들을 추가로 보호해요.
+- 채팅 조회도 `RATE_LIMIT_KV`로 IP당 요청 수를 제한해서 위 한도들을 추가로 보호해요.
 
 ## 위치(동네) 검색 정확도 개선 (선택 기능)
 설정 탭에서 동네를 검색할 때 기본으로는 Open-Meteo 지오코딩(무료, 키 불필요)을 쓰는데, 이건 한국 동/구 단위 행정구역 커버리지가 얇아서 "금천구"처럼 일부 검색어가 아예 안 나오는 경우가 있어요. 아래 환경변수를 추가하면 **카카오 로컬 API**를 우선 쓰도록 자동 전환돼서 훨씬 정확해져요:
@@ -69,7 +68,6 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 - 설정 탭 "내 정보"에서 온보딩 때 입력한 성별/키를 나중에 다시 확인하고 바꿀 수 있어요.
 - 얼굴/옷 사진은 서버에 저장하지 않고 그 요청 처리에만 사용돼요. 베타 화면에도 이 안내 문구를 넣는 걸 추천해요.
 - 성별/키/스타일/위치 설정은 브라우저 `localStorage`에 저장돼서, 사용자가 직접 캐시나 사이트 데이터를 지우지 않는 한 새로고침해도 유지돼요 (DB 없이 클라이언트에만 저장하는 구조라, 다른 기기·브라우저에서는 안 보여요). 채팅 기록은 여전히 새로고침하면 초기화돼요.
-- 옷차림 추천 태그(니트, 청바지 등)를 클릭하면 그 아이템 하나로 상품 추천이 다시 조회돼요. AI 채팅 답변 아래에도 같은 방식으로 추천 아이템의 실제 상품 카드가 떠요.
 - 알림 탭은 하드코딩된 문구가 아니라, 매번 날씨를 불러올 때 실제 조건(비/눈/강풍/기온차/폭염/한파)에 맞춰 다시 만들어져요. 해당 없는 조건은 안 뜨고, "오늘 추천 코디가 도착했어!"는 날씨를 불러올 때마다 항상 포함돼요. 아직 날씨를 못 불러왔거나 알림이 하나도 없으면 "받은 알림이 없어요!" 화면이 떠요.
 - 날씨 카드 아래에 확인 시점부터 최대 24시간까지의 시간별 기온/날씨 캐러셀이 떠요. 지난 시간은 자동으로 빠지고, 다음 날로 넘어가는 시간대도 이어서 보여줘요.
 - 설정에서 위치를 검색하면 동명 지역(예: "신도시")이 여러 곳 나올 수 있어 시/군/구까지 포함한 후보 목록을 보여주고, 그중 하나를 선택해서 추가하는 방식이에요.

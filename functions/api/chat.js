@@ -13,11 +13,11 @@
 //   Settings > Functions > KV namespace bindings 에서 RATE_LIMIT_KV 라는 이름으로 KV 네임스페이스 연결
 //   -> 연결하면 IP당 하루 요청 횟수를 제한해줌 (한 사람이 하루 무료 뉴런 할당량을 다 쓰는 것 방지)
 //   Settings > Environment variables 에서 NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 추가 (ncloud.com "NAVER API HUB", 무료)
-//   -> 연결하면 오늘 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품을 검색해 핏치 답변에 참고자료로 녹여줌
+//   -> 연결하면 오늘 날씨/계절에 맞는 네이버 블로그 코디 글을 검색해 핏치 답변에 참고자료로 녹여줌
 //   Settings > Environment variables 에서 YOUTUBE_API_KEY 추가 (Google Cloud Console, 무료, 카드 불필요)
 //   -> 연결하면 요즘 패션 유튜버들의 계절별 영상 제목/설명을 핏치 답변 참고자료로 녹여줌 (영상 자체는 화면에 노출 안 함)
 
-import { weatherQueryParts, searchNaverBlog, searchNaverShop, stripNaverMarkup, checkRateLimit, jsonResponse } from '../../lib/naver.js';
+import { weatherQueryParts, searchNaverBlog, stripNaverMarkup, checkRateLimit, jsonResponse } from '../../lib/naver.js';
 import { searchYoutubeTrend } from '../../lib/youtube.js';
 
 const SYSTEM_PROMPT =
@@ -166,7 +166,9 @@ function buildOutfitFact(weather) {
   );
 }
 
-// ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품 + 유튜브 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
+// ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 유튜브 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
+// (네이버 쇼핑 개별 상품 검색은 NAVER API HUB에 아예 없는 상품이라 뺐음 — "쇼핑인사이트"라는
+// 집계 트렌드 API만 있고, 사진/가격/링크가 있는 개별 상품 검색은 제공되지 않음)
 async function fetchTrendContext(env, weather) {
   const hasNaver = !!(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET);
   const hasYoutube = !!env.YOUTUBE_API_KEY;
@@ -175,30 +177,18 @@ async function fetchTrendContext(env, weather) {
   const baseParts = weatherQueryParts(weather);
   const blogQuery = [...baseParts, '코디'].join(' ');
   const ytQuery = [...baseParts, '데일리룩'].join(' ');
-  const hasTopItem = weather && Array.isArray(weather.items) && weather.items.length > 0;
-  const shopQuery = hasTopItem ? [...baseParts, weather.items[0]].join(' ') : '';
 
-  const [blogItems, shopItems, ytItems] = await Promise.all([
+  const [blogItems, ytItems] = await Promise.all([
     hasNaver ? searchNaverBlog(env, blogQuery, 3) : Promise.resolve([]),
-    hasNaver && hasTopItem ? searchNaverShop(env, shopQuery, 2) : Promise.resolve([]), // 대표 아이템 1개만 조회해 API 호출량 절약
     hasYoutube ? searchYoutubeTrend(env, ytQuery, 3) : Promise.resolve([]),
   ]);
 
-  const productLines = shopItems.map((p, i) => {
-    const price = Number(p.lprice);
-    const priceLabel = Number.isFinite(price) ? `${price.toLocaleString()}원` : '';
-    return `${i + 1}. ${stripNaverMarkup(p.title)} - ${priceLabel} (${p.mallName}) ${p.link}`;
-  });
-
-  if (!blogItems.length && !productLines.length && !ytItems.length) return '';
+  if (!blogItems.length && !ytItems.length) return '';
 
   let ctx = '';
   if (blogItems.length) {
     const lines = blogItems.map((it, i) => `${i + 1}. ${stripNaverMarkup(it.title)} - ${stripNaverMarkup(it.description)}`);
     ctx += `\n\n[참고 자료: '${blogQuery}' 네이버 블로그 검색 결과]\n${lines.join('\n')}`;
-  }
-  if (productLines.length) {
-    ctx += `\n\n[참고 자료: 지금 날씨에 어울리는 실제 판매 상품]\n${productLines.join('\n')}\n상품을 추천할 땐 이 목록 중 어울리는 걸 골라 이름과 링크를 자연스럽게 언급해줘.`;
   }
   if (ytItems.length) {
     const lines = ytItems.map((v, i) => `${i + 1}. [${v.channel}] ${v.title} - ${v.description.slice(0, 80)}`);
