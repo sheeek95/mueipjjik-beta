@@ -136,6 +136,7 @@
   .tab-btn{ flex:1; text-align:center; padding:10px; border-radius:11px; font-size:13px; cursor:pointer; font-weight:700; color:var(--ink-soft); }
   .tab-btn.active{ background:var(--card); color:var(--peach-deep); }
   .chat-body{ flex:1; overflow-y:auto; padding:10px 16px; display:flex; flex-direction:column; gap:12px; }
+  .chat-body .product-scroll{ padding:0 0 4px; margin:-6px 0 0; }
   .msg{ max-width:78%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; }
   .msg.bot{ background:var(--card); align-self:flex-start; border-bottom-left-radius:4px; box-shadow:0 1px 6px rgba(0,0,0,0.04);}
   .msg.user{ background:var(--peach-deep); color:white; align-self:flex-end; border-bottom-right-radius:4px; }
@@ -856,7 +857,8 @@ function currentWeatherCtx(){
     isSnow: SNOW_CODES.has(wcode),
     windSpeed,
     style: state.style,
-    items: pieces.slice(0,2)
+    items: pieces, // 채팅 백엔드가 "오늘의 추천 코디" 사실로 그대로 언급하도록 전체 아이템을 보냄
+    shoe: (STYLE_FLAVOR[state.style] || {}).extra
   };
 }
 
@@ -907,13 +909,47 @@ async function sendChat(){
       const mime = img.substring(5, img.indexOf(';'));
       content.push({type:'image', source:{type:'base64', media_type:mime, data:base64}});
     }
-    const reply = await callFitchAI(content, currentWeatherCtx());
+    const weatherCtx = currentWeatherCtx();
+    const reply = await callFitchAI(content, weatherCtx);
     loadingRow.remove();
     addBotMsg(reply);
+    if(weatherCtx) addBotProductCards(weatherCtx.items.slice(0,2), weatherCtx);
   }catch(err){
     loadingRow.remove();
     addBotMsg('앗, 지금 답변을 가져오지 못했어 😥 잠시 후 다시 시도해줄래?');
   }
+}
+async function addBotProductCards(items, weatherCtx){
+  if(!items || !items.length) return;
+  try{
+    const res = await fetch('/api/products', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items, weather: weatherCtx })
+    });
+    const data = await res.json();
+    const cards = [];
+    (data.groups||[]).forEach(g=>{
+      (g.products||[]).forEach(p=>{
+        if(!p.link || !/^https?:\/\//.test(p.link)) return;
+        cards.push(`
+          <a class="product-card" href="${escapeHtml(p.link)}" target="_blank" rel="noopener noreferrer">
+            <img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}" loading="lazy">
+            <div class="product-tag">${escapeHtml(g.tag)}</div>
+            <div class="product-title">${escapeHtml(p.title)}</div>
+            <div class="product-price">${p.price ? Number(p.price).toLocaleString()+'원' : ''}</div>
+            <div class="product-mall">${escapeHtml(p.mall)}</div>
+          </a>`);
+      });
+    });
+    if(!cards.length) return;
+    const body = document.getElementById('chatBody');
+    const wrap = document.createElement('div');
+    wrap.className = 'product-scroll';
+    wrap.innerHTML = cards.join('');
+    body.appendChild(wrap);
+    body.scrollTop = body.scrollHeight;
+  }catch(e){ /* 상품 카드 로드 실패해도 채팅 자체는 정상 동작 */ }
 }
 
 /* =============== CHAT: FIT TAB =============== */

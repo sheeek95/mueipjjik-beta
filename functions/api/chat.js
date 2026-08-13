@@ -21,19 +21,19 @@ import { weatherQueryParts, searchNaverBlog, searchNaverShop, stripNaverMarkup, 
 import { searchYoutubeTrend } from '../../lib/youtube.js';
 
 const SYSTEM_PROMPT =
-  "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 사용자의 옷차림/사진을 보고 " +
-  "스타일리스트처럼 객관적인 피드백(색조합, 체형에 맞는 핏, 개선점, 추천 아이템)을 주되, " +
-  "말투는 다정하고 존댓말 대신 친근한 반말로, 너무 길지 않게 3~6문장 정도로 답해. 이모지를 가끔 섞어서 써. " +
-  "아주 중요한 규칙: 반드시 자연스럽게 이어지는 한국어 구어체 문장으로만 답하고, " +
-  "영어 단어나 한자를 절대 섞지 마 (예: dominated, Size, 色 같은 표현 금지 — '지배적이야', '오버사이즈', '연두색'처럼 순우리말/한글로 풀어서 써). " +
-  "별표(*), 마크다운 기호, 번호 매기기 같은 건 쓰지 말고, 그냥 대화하듯 문장을 이어서 말해.";
+  "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 다정하고 친근한 반말로 답해. " +
+  "질문으로 시작하지 말고 바로 추천/답변부터 말해. 3~4문장 이내로 짧고 간결하게, 이모지는 가끔만. " +
+  "반드시 자연스러운 한국어 문장으로만 답하고, 영어·한자·다른 외국어 단어를 절대 섞지 마. " +
+  "별표(*), 마크다운 기호, 번호 매기기는 쓰지 말고 대화하듯 문장을 이어서 말해. " +
+  "아래 [오늘의 추천 코디]가 이미 계산된 정답이니 지어내지 말고 이 아이템들을 그대로 언급하면서 자연스럽게 설명해줘.";
 
-// llama-3.1-8b-instruct는 2026-05-30부로 지원 종료돼서 llama-3.2-3b-instruct로 교체함.
-// vision 모델과 같은 Llama 계열이라 응답 형식(result.response)이 동일할 가능성이 높아 이걸로 선택함
-// (gemma-4-26b-a4b-it로 한 번 교체해봤는데 result.response가 비어 있어서 롤백함).
-const TEXT_MODEL = '@cf/meta/llama-3.2-3b-instruct';
+// llama-3.1-8b-instruct(지원종료, 2026-05-30) -> llama-3.2-3b-instruct로 교체했다가
+// 한국어에 영어/태국어/힌디어가 무작위로 섞여 나오는 문제가 있어서 다시 교체함.
+// 이미지 채팅에서 이미 검증된 llama-3.2-11b-vision-instruct는 messages 형식도 지원해서
+// 텍스트/이미지 채팅 모두 이 모델 하나로 통일 (더 큰 모델이라 다국어 안정성이 더 나음).
+const TEXT_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 const VISION_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
-const MAX_TOKENS = 512;
+const MAX_TOKENS = 300; // 답변을 짧게 유지하기 위해 축소
 
 const DAILY_LIMIT_PER_IP = 20; // 무료 뉴런 할당량을 나눠 쓰기 위한 IP별 하루 요청 한도 (필요시 조정)
 
@@ -67,8 +67,10 @@ export async function onRequestPost(context) {
     const imageBlock = Array.isArray(userContent) ? userContent.find((b) => b.type === 'image') : null;
     const userText = (textBlock && textBlock.text) || '이 코디 어때? 색조합이랑 핏 좀 봐줘.';
 
-    const trendContext = await fetchTrendContext(env, body && body.weather);
-    const systemPrompt = SYSTEM_PROMPT + trendContext;
+    const weather = body && body.weather;
+    const outfitFact = buildOutfitFact(weather);
+    const trendContext = await fetchTrendContext(env, weather);
+    const systemPrompt = SYSTEM_PROMPT + outfitFact + trendContext;
 
     let reply;
     if (imageBlock) {
@@ -110,6 +112,16 @@ function safeStringify(obj) {
   } catch (e) {
     return String(obj);
   }
+}
+
+// 프론트에서 이미 (기온대 x 스타일)로 계산해서 보낸 실제 추천 아이템을 "정답"으로 프롬프트에 박아넣음.
+// 모델이 스스로 옷차림을 지어내지 않고, 이미 정해진 조합을 자연스럽게 설명하게 하기 위함.
+function buildOutfitFact(weather) {
+  if (!weather || !Array.isArray(weather.items) || !weather.items.length) return '';
+  const bits = [`[오늘의 추천 코디] ${weather.items.join(', ')}`];
+  if (weather.shoe) bits.push(`신발: ${weather.shoe}`);
+  if (weather.style) bits.push(`스타일: ${weather.style}`);
+  return `\n\n${bits.join(' / ')}`;
 }
 
 // ---- 날씨/계절에 맞는 네이버 블로그 코디 글 + 실제 상품 + 유튜브 트렌드를 찾아 시스템 프롬프트에 참고자료로 덧붙임 ----
