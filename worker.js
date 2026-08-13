@@ -4,6 +4,7 @@
 
 import { onRequestPost as handleChat } from './functions/api/chat.js';
 import { onRequestPost as handleProducts } from './functions/api/products.js';
+import { onRequestGet as handleGeocode } from './functions/api/geocode.js';
 
 export default {
   async fetch(request, env) {
@@ -14,6 +15,9 @@ export default {
     }
     if (request.method === 'POST' && url.pathname === '/api/products') {
       return handleProducts({ request, env });
+    }
+    if (request.method === 'GET' && url.pathname === '/api/geocode') {
+      return handleGeocode({ request, env });
     }
 
     return env.ASSETS.fetch(request);
