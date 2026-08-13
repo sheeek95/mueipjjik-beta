@@ -629,7 +629,15 @@ async function fetchWeather(){
     const wcode = cur.weather_code;
     const windSpeed = Math.round(cur.wind_speed_10m);
     const [emoji, desc] = WMO[wcode] || ['⛅','알 수 없음'];
-    const rainProb = data.hourly && data.hourly.precipitation_probability ? data.hourly.precipitation_probability[0] : 0;
+
+    // 현재 시각과 같은(또는 그 이후 가장 가까운) 시간대의 인덱스를 한 번만 계산해서
+    // 강수확률 카드와 시간별 캐러셀이 서로 다른 시간을 가리키지 않도록 함
+    let nowIdx = 0;
+    if(data.hourly && Array.isArray(data.hourly.time)){
+      const idx = data.hourly.time.findIndex(t => t >= cur.time);
+      nowIdx = idx>=0 ? idx : 0;
+    }
+    const rainProb = data.hourly && data.hourly.precipitation_probability ? data.hourly.precipitation_probability[nowIdx] : 0;
 
     document.getElementById('wxTemp').textContent = temp;
     document.getElementById('wxFeel').textContent = feel;
@@ -639,7 +647,7 @@ async function fetchWeather(){
     document.getElementById('wxHumid').textContent = cur.relative_humidity_2m + '%';
     document.getElementById('wxWind').textContent = windSpeed + ' km/h';
 
-    renderHourly(data.hourly, cur.time);
+    renderHourly(data.hourly, nowIdx);
 
     state.lastWeather = {feel, rainProb, windSpeed, wcode};
     renderOutfit(feel, rainProb, windSpeed, wcode);
@@ -657,12 +665,10 @@ function hourLabel(isoStr, isNow){
   let h12 = hour % 12; if(h12===0) h12 = 12;
   return `${ampm} ${h12}시`;
 }
-function renderHourly(hourly, nowIso){
+function renderHourly(hourly, startIdx){
   const wrap = document.getElementById('hourlyScroll');
   if(!wrap || !hourly || !Array.isArray(hourly.time)) return;
-  // 현재 시각(지역 기준) 이후 시간대만, 최대 24개(24시간)까지만 노출
-  let startIdx = hourly.time.findIndex(t => t >= nowIso);
-  if(startIdx < 0) startIdx = 0;
+  // 확인 시점 이후 시간대만, 최대 24개(24시간)까지만 노출
   const slice = hourly.time.slice(startIdx, startIdx+24);
   wrap.innerHTML = slice.map((t,i)=>{
     const idx = startIdx+i;
@@ -1078,7 +1084,8 @@ async function searchLocations(){
   resultsEl.innerHTML = '';
   if(!name) return;
   try{
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=ko`);
+    // countryCode=KR로 한국 지역만 검색 (북한/동명 해외 지역이 섞여 나오는 것 방지), count를 늘려 원하는 동네가 더 잘 나오게 함
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=10&language=ko&countryCode=KR`);
     const data = await res.json();
     if(!data.results || !data.results.length){
       errEl.style.display = 'block';
