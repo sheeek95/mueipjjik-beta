@@ -134,9 +134,9 @@
     font-size:13px; cursor:pointer; white-space:nowrap;
   }
   .style-chip.selected{ background:var(--sage); border-color:var(--sage-deep); color:#2E4E22; font-weight:700; }
-  .chat-style-picker{ padding:12px 16px 4px; border-bottom:1px solid var(--line); }
-  .chat-style-label{ font-size:12px; color:var(--ink-soft); margin-bottom:8px; }
-  .chat-style-row{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+  .chat-style-label{ font-size:13px; margin-bottom:8px; }
+  .chat-style-row{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; margin:0 -4px; }
+  .msg.bot.chat-style-msg{ max-width:92%; }
 
   .outfit-card{
     margin:0 20px 16px; background:var(--card); border-radius:20px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,0.04);
@@ -387,16 +387,6 @@
     </div>
 
     <div id="chatCoachView" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-      <div class="chat-style-picker">
-        <div class="chat-style-label">어떤 스타일이 궁금해? 골라주면 그 스타일로 코디를 추천해줄게</div>
-        <div class="chat-style-row">
-          <div class="style-chip" onclick="pickChatStyle('캐주얼')">캐주얼</div>
-          <div class="style-chip" onclick="pickChatStyle('로맨틱')">로맨틱</div>
-          <div class="style-chip" onclick="pickChatStyle('미니멀')">미니멀</div>
-          <div class="style-chip" onclick="pickChatStyle('포멀')">포멀</div>
-          <div class="style-chip" onclick="pickChatStyle('스트릿')">스트릿</div>
-        </div>
-      </div>
       <div class="chat-body" id="chatBody"></div>
       <div class="chat-input-bar">
         <button class="round-btn" onclick="document.getElementById('imgUpload').click()">📷</button>
@@ -880,12 +870,19 @@ let pendingImage = null;
 let chatHistory = []; // [{role, content}] 최근 대화만 유지 (새로고침하면 초기화)
 function seedChat(){
   addBotMsg('안녕! 나는 패션요정 핏치야 🐹 오늘 입은 코디 사진을 보내주면 색조합이랑 핏을 봐줄게. 궁금한 거 편하게 물어봐!');
+  const styleChips = ['캐주얼','로맨틱','미니멀','포멀','스트릿']
+    .map(s=>`<div class="style-chip" onclick="pickChatStyle('${s}')">${s}</div>`).join('');
+  addBotMsg(
+    `<div class="chat-style-label">어떤 스타일이 궁금해? 골라주면 그 스타일로 코디를 추천해줄게</div>` +
+    `<div class="chat-style-row">${styleChips}</div>`,
+    null, 'chat-style-msg'
+  );
 }
-function addBotMsg(text, imgSrc){
+function addBotMsg(text, imgSrc, extraClass){
   const body = document.getElementById('chatBody');
   const row = document.createElement('div');
   row.className='bot-row';
-  row.innerHTML = `<svg class="avatar" viewBox="0 0 100 100" role="img" aria-label="핏치"><circle cx="50" cy="50" r="49" fill="#FFE8D6"/><ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="30" r="7" fill="#FFC6B0"/><circle cx="74" cy="30" r="7" fill="#FFC6B0"/><circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/><circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/><ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/><path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/></svg><div class="msg bot">${text}${imgSrc?`<img src="${imgSrc}">`:''}</div>`;
+  row.innerHTML = `<svg class="avatar" viewBox="0 0 100 100" role="img" aria-label="핏치"><circle cx="50" cy="50" r="49" fill="#FFE8D6"/><ellipse cx="50" cy="60" rx="34" ry="30" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="74" cy="28" r="13" fill="#F3D2AE" stroke="#3E2F2A" stroke-width="2"/><circle cx="26" cy="30" r="7" fill="#FFC6B0"/><circle cx="74" cy="30" r="7" fill="#FFC6B0"/><circle cx="38" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="62" cy="58" r="9" fill="#FFC6B0" opacity="0.7"/><circle cx="40" cy="52" r="3.2" fill="#3E2F2A"/><circle cx="60" cy="52" r="3.2" fill="#3E2F2A"/><ellipse cx="50" cy="60" rx="4" ry="3" fill="#B8563A"/><path d="M42 66 Q50 72 58 66" stroke="#3E2F2A" stroke-width="2" fill="none" stroke-linecap="round"/></svg><div class="msg bot${extraClass?' '+extraClass:''}">${text}${imgSrc?`<img src="${imgSrc}">`:''}</div>`;
   body.appendChild(row);
   body.scrollTop = body.scrollHeight;
 }
