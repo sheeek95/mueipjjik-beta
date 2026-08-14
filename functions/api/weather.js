@@ -162,7 +162,7 @@ async function fetchVilageFcst(env, nx, ny, kst) {
 
 async function kmaRequest(env, endpoint, params) {
   const qs = new URLSearchParams({
-    serviceKey: env.KMA_SERVICE_KEY,
+    serviceKey: normalizeServiceKey(env.KMA_SERVICE_KEY),
     dataType: 'JSON',
     pageNo: '1',
     numOfRows: String(params.numOfRows),
@@ -189,6 +189,23 @@ async function kmaRequest(env, endpoint, params) {
   } catch (e) {
     return { error: `fetch error: ${String(e)}` };
   }
+}
+
+// data.go.kr 인증키는 Encoding(퍼센트 인코딩된 형태, 예: ...%2B...)과 Decoding(원문) 두 가지로
+// 받을 수 있는데, 포털 UI가 페이지마다 어느 쪽을 보여주는지 달라서 헷갈리기 쉬움. 이미 퍼센트
+// 인코딩된 값처럼 보이면 먼저 원문으로 되돌린 뒤 URLSearchParams가 한 번만 인코딩하게 해서,
+// 어느 쪽 키를 넣어도 이중 인코딩 없이 동작하도록 함.
+function normalizeServiceKey(key) {
+  if (typeof key !== 'string') return key;
+  const trimmed = key.trim();
+  if (/%[0-9A-Fa-f]{2}/.test(trimmed)) {
+    try {
+      return decodeURIComponent(trimmed);
+    } catch (e) {
+      return trimmed;
+    }
+  }
+  return trimmed;
 }
 
 function kstNow() {
