@@ -7,6 +7,7 @@
 index.html                프론트엔드 전체 (온보딩/홈/AI채팅/설정/알림)
 functions/api/chat.js     AI 채팅 프록시 (Cloudflare Pages Function, Cloudflare Workers AI 무료 티어 사용)
 functions/api/geocode.js   위치(동네) 검색 → 좌표 변환 프록시 (카카오 로컬 API, 없으면 Open-Meteo로 대체)
+functions/api/weather.js   날씨 조회 프록시 (한국 기상청 KMA 공식 데이터, 없으면 Open-Meteo로 대체)
 lib/naver.js               네이버 블로그 검색 API 헬퍼
 lib/youtube.js              YouTube Data API 헬퍼 (트렌드 검색 + 캐싱)
 lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
@@ -15,7 +16,7 @@ lib/text.js                 HTML 엔티티 디코딩 등 공통 텍스트 유틸
 ## 배포: Cloudflare(Workers, Git 연동) 전용
 이 프로젝트는 **Cloudflare**에만 배포할 수 있어요. `functions/api/chat.js` 등이 Cloudflare의 서버리스 런타임에서만 동작하기 때문에, GitHub Pages 같은 순수 정적 호스팅에 올리면 AI 채팅(핏치 코디 상담)이 동작하지 않아요.
 
-Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 `npx wrangler deploy`가 자동 지정되는데, 이건 저장소 루트의 **`wrangler.jsonc`** 설정을 읽어서 배포해요. 그래서 이 저장소엔 `wrangler.jsonc`(설정)와 `worker.js`(진입점 — `/api/chat`, `/api/geocode`는 `functions/api/*.js`로 라우팅하고 나머지는 정적 파일로 서빙)가 포함돼 있어요. 대시보드에서 "AI" 바인딩을 따로 추가할 필요 없이 `wrangler.jsonc`의 `ai` 설정만으로 Workers AI가 동작해요.
+Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 `npx wrangler deploy`가 자동 지정되는데, 이건 저장소 루트의 **`wrangler.jsonc`** 설정을 읽어서 배포해요. 그래서 이 저장소엔 `wrangler.jsonc`(설정)와 `worker.js`(진입점 — `/api/chat`, `/api/geocode`, `/api/weather`는 `functions/api/*.js`로 라우팅하고 나머지는 정적 파일로 서빙)가 포함돼 있어요. 대시보드에서 "AI" 바인딩을 따로 추가할 필요 없이 `wrangler.jsonc`의 `ai` 설정만으로 Workers AI가 동작해요.
 
 배포 절차:
 1. Cloudflare 대시보드에서 이 저장소를 Git으로 연결 (Build command 비워둠 → 자동으로 `npx wrangler deploy` 사용)
@@ -27,6 +28,23 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 ⚠️ **Workers AI 모델은 예고 없이 지원 종료(deprecated)될 수 있어요.** 실제로 이 프로젝트도 배포 초기에 썼던 모델이 지원 종료되면서 AI채팅이 500 에러로 막힌 적이 있어요. 채팅이 갑자기 안 되면: 브라우저 개발자 도구(F12) > Network 탭 > `chat` 요청 클릭 > Response 탭에서 에러 메시지를 확인해보세요. `AiError ... was deprecated`처럼 나오면 `functions/api/chat.js`의 `TEXT_MODEL`(또는 `VISION_MODEL`) 값을 최신 모델 ID로 바꿔야 해요.
 
 ⚠️ 하루 10,000 뉴런은 **Cloudflare 계정 전체가 공유하는 무료 한도**예요 (대화 1건당 대략 수백 뉴런 소모). 사용자가 많아지면 하루 중간에 한도가 소진될 수 있으니, 이 경우 Workers AI 사용량 기반 유료 전환을 고려해야 해요.
+
+## 날씨 정확도 개선 (선택 기능, 강력 추천)
+기본으로는 Open-Meteo(무료, 키 불필요)를 쓰는데, 이건 전 세계용 범용 예보 모델이라 한국 기준으로는 다른 날씨 앱(기상청 기반)과 기온·체감온도·강수확률이 꽤 다르게 나올 수 있어요. 아래 환경변수를 추가하면 **한국 기상청(KMA) 공식 관측/예보 자료**를 우선 쓰도록 자동 전환돼서 다른 한국 날씨 앱들과 훨씬 비슷해져요:
+
+- **`KMA_SERVICE_KEY`가 있으면**: `functions/api/weather.js`가 위경도를 기상청 격자좌표(nx,ny)로 변환해서 **초단기실황**(실시간 관측값 — 기온/습도/풍속/강수형태)과 **단기예보**(하늘상태 + 시간별 24시간 예보)를 같이 조회해요. 체감온도는 기상청이 실제 쓰는 공식(여름철 열지수/겨울철 풍속냉각지수)으로 직접 계산해요. 실패하면(키 오류, 격자 밖 등) 자동으로 Open-Meteo로 대체돼요 (완전히 실패하는 일은 없음).
+- 설정하지 않으면 기존처럼 Open-Meteo만 써요.
+
+발급 방법:
+1. [data.go.kr](https://www.data.go.kr) 로그인 (회원가입 무료)
+2. "기상청_단기예보 조회서비스(기상청API허브 연계)" 검색 > **활용신청** (자동 승인, 대기시간 없음)
+3. 마이페이지 > **개발계정 상세보기**에서 발급된 인증키 확인 — **"일반 인증키(Decoding)"** 값을 그대로 복사
+   ⚠️ "Encoding" 키를 넣으면 코드가 다시 인코딩해서 이중 인코딩 오류가 나요. 꼭 **Decoding** 키를 써야 해요.
+4. Cloudflare 환경변수 `KMA_SERVICE_KEY`에 등록
+
+⚠️ 할당량: 활용신청 직후 기본 하루 1,000건 무료(트래픽이 필요하면 마이페이지에서 활용사례 등록 후 최대 10,000건/일까지 늘릴 수 있음). 날씨 새로고침 1번당 초단기실황+단기예보 2건을 호출하므로, `RATE_LIMIT_KV`가 연결돼 있으면 IP당 하루 200건으로 제한해서 이 한도를 보호해요.
+
+⚠️ 참고: 기상청 API는 발표 후 일정 시간이 지나야 자료가 준비돼요(초단기실황 약 40~45분, 단기예보 약 10분). 코드가 이 지연을 감안해서 자동으로 가장 최근 사용 가능한 발표 시각을 골라 요청해요.
 
 ## 코디 트렌드 (선택 기능)
 아래 환경변수를 설정하면 켜져요. 전부 크롤링이 아니라 네이버/구글이 공식 제공하는 검색 API를 그대로 씀:
@@ -62,7 +80,7 @@ Cloudflare 대시보드에서 저장소를 Git 연동하면 배포 명령으로 
 ⚠️ 할당량: 카카오 로컬 API는 앱당 하루 100,000건 무료예요. `checkRateLimit`으로 IP당 하루 요청 수도 제한해서 이 한도를 보호해요.
 
 ## 참고
-- 날씨(Open-Meteo), 역지오코딩(BigDataCloud) API는 키가 필요 없어서 브라우저에서 바로 호출돼요. 위치(동네) 검색은 `/api/geocode`를 통해 서버에서 처리돼요 (카카오 로컬 API 우선, 없으면 Open-Meteo 대체).
+- 역지오코딩(BigDataCloud) API는 키가 필요 없어서 브라우저에서 바로 호출돼요. 날씨는 `/api/weather`(KMA 우선, 없으면 Open-Meteo 대체), 위치(동네) 검색은 `/api/geocode`(카카오 로컬 API 우선, 없으면 Open-Meteo 대체)를 통해 서버에서 처리돼요.
 - 기본 위치는 서울시 강남구예요. 위치 권한을 허용하면 현재 위치로, 거부하면 강남구 좌표로 날씨를 보여줘요.
 - 설정 탭에서 위치를 추가하면 목록에서 눌러 활성 위치를 바로 전환할 수 있고, ✕ 버튼으로 삭제할 수 있어요.
 - 설정 탭 "내 정보"에서 온보딩 때 입력한 성별/키를 나중에 다시 확인하고 바꿀 수 있어요.

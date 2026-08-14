@@ -624,8 +624,9 @@ function requestLocation(){
 async function fetchWeather(){
   try{
     const {lat,lon} = state.loc;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=2&timezone=auto`;
-    const res = await fetch(url);
+    // 서버(/api/weather)가 한국 기상청(KMA) 공식 데이터를 우선 쓰고, 설정 안 돼 있거나 실패하면
+    // Open-Meteo로 자동 대체함. 응답 모양은 항상 Open-Meteo 형식(current/hourly)으로 정규화돼서 옴.
+    const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
     const data = await res.json();
     const cur = data.current;
     const feel = Math.round(cur.apparent_temperature);
