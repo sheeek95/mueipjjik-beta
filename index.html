@@ -1026,7 +1026,7 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   const isSnow = SNOW_CODES.has(wcode);
   const isRain = RAIN_CODES.has(wcode) || rainProb>=50;
 
-  document.getElementById('outfitTier').textContent = `체감 ${feel}℃ · ${tier.label} 추천 (${state.style})`;
+  document.getElementById('outfitTier').textContent = `체감 ${feel}℃ · ${tier.label} 추천`;
   document.getElementById('outfitCycleBtn').style.display = altCount>1 ? 'inline-block' : 'none';
   const flavor = STYLE_FLAVOR[state.style];
 
