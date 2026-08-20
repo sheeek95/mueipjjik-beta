@@ -824,11 +824,14 @@ function selectStyle(s){
 const WIND_STRONG = 30; // km/h 이상이면 강풍으로 안내
 const WIND_BREEZY = 15; // km/h 이상이면 선선한 바람으로 안내
 function pickRandom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-// "핏치의 한마디"를 매번 똑같은 문장이 아니라, 상황별로 여러 문구 중 하나를 골라 조합해서 만듦.
-// 체감온도 구간별로 다른 톤의 추천 멘트를 주고, 지금 당장은 안 오지만 곧 비 소식이 있으면
-// 몇 시쯤인지 콕 집어서 우산을 챙기라고 알려줌(upcomingRain, findUpcomingRain 참고).
+// "핏치의 한마디"는 한 번에 모든 조건을 다 이어붙이면 너무 길어지니까, 지금 상황에 해당하는
+// 주제(옷차림/비·눈/바람/기온차/불쾌지수)들을 후보로 모아두고 그중 딱 하나만 골라서 짧게 보여줌.
+// 그래서 새로고침할 때마다 어떨 땐 옷 얘기, 어떨 땐 날씨나 불쾌지수 얘기가 나옴.
 function buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain, discomfortIndex){
-  const openers = feel>=33 ? [
+  const candidates = [];
+
+  // 옷차림 후보 (체감온도 구간별 톤) — 항상 후보에 포함
+  const outfitLines = feel>=33 ? [
     `체감 ${feel}℃, 푹푹 찌는 더위야! 최대한 가볍고 시원하게 입어~`,
     `체감 ${feel}℃면 진짜 더운 날씨야. 통풍 잘 되는 소재로 시원하게 입는 걸 추천해`,
     `오늘 체감 ${feel}℃! 더위 조심하고 얇고 헐렁하게 입는 게 좋겠어`
@@ -849,41 +852,57 @@ function buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomi
     `체감 ${feel}℃ 정도야. ${pieces[0]} 입으면 딱 좋은 날씨야`,
     `오늘은 체감 ${feel}℃, 무난하게 ${pieces[0]} 위주로 입어봐`
   ];
-  let msg = pickRandom(openers);
+  candidates.push(pickRandom(outfitLines));
 
   if(isSnow){
-    msg += pickRandom([' 눈 소식이 있어서 미끄러지지 않는 신발 신는 게 좋겠어 ❄️', ' 눈 올 수 있으니까 미끄럼 방지 신발 신고 조심히 다녀와!']);
+    candidates.push(pickRandom([
+      '눈 소식이 있어! 미끄러지지 않는 신발 신고 조심히 다녀와 ❄️',
+      '오늘은 눈이 올 수 있으니까 미끄럼 방지 신발 신고 다녀오는 게 좋겠어!'
+    ]));
   } else if(isRain || rainProb>=60){
-    msg += pickRandom([' 비 올 확률 높으니까 우산도 꼭 챙기고!', ' 지금 비 소식이 있어서 우산은 필수야!']);
+    candidates.push(pickRandom([
+      '지금 비 올 확률이 높아! 우산 꼭 챙기고 나가',
+      '오늘은 비 소식이 있어서 우산이 필수야!'
+    ]));
   } else if(upcomingRain){
-    msg += ` ${upcomingRain.label}쯤부터 비 소식이 있으니(강수확률 ${upcomingRain.prob}%) 우산 챙겨가는 거 잊지 마!`;
+    candidates.push(pickRandom([
+      `${upcomingRain.label}쯤부터 비 소식이 있어(강수확률 ${upcomingRain.prob}%). 미리 우산 챙겨두는 게 좋겠어!`,
+      `이따 ${upcomingRain.label}부터 비가 올 수 있어(강수확률 ${upcomingRain.prob}%), 나갈 때 우산 잊지 마!`
+    ]));
   }
 
   if(windSpeed>=WIND_STRONG){
-    msg += pickRandom([' 바람이 꽤 강하게 부니까 체감온도가 더 낮을 수 있어, 바람막이 챙겨!', ' 바람이 세게 불어서 더 춥게 느껴질 수 있어, 겉옷 하나 더 걸쳐!']);
+    candidates.push(pickRandom([
+      '오늘 바람이 꽤 강하게 불어. 체감온도가 더 낮을 수 있으니 바람막이 하나 챙겨!',
+      '바람이 세게 부는 날이야, 겉옷 하나 더 걸치는 게 좋겠어!'
+    ]));
   } else if(windSpeed>=WIND_BREEZY){
-    msg += pickRandom([' 바람이 선선하게 부는 날이야~', ' 산들바람 부는 날씨네!']);
+    candidates.push(pickRandom([
+      '오늘은 선선한 바람이 부는 날씨야~',
+      '산들바람이 기분 좋게 부는 날이네!'
+    ]));
   }
 
   if(!isSnow && !isRain && !upcomingRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8){
-    msg += pickRandom([' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!', ' 낮이랑 밤 기온차가 있을 수 있어서 얇은 겉옷 하나 챙기면 좋아!']);
+    candidates.push(pickRandom([
+      '아침·저녁으로 기온차가 있을 수 있으니 얇은 겉옷 하나 챙겨가는 거 추천!',
+      '낮이랑 밤 기온차가 있을 수 있어서 겉옷 하나 들고 나가면 좋아!'
+    ]));
   }
 
-  if(typeof discomfortIndex === 'number'){
-    if(discomfortIndex>=80){
-      msg += pickRandom([
-        ` 게다가 불쾌지수도 ${Math.round(discomfortIndex)}로 최고 단계야. 물 충분히 마시고 야외활동은 좀 자제하는 게 좋겠어!`,
-        ` 불쾌지수까지 ${Math.round(discomfortIndex)}(매우높음)라 다들 후덥지근하게 느낄 거야. 에어컨·제습기로 실내 온습도 조절해줘!`
-      ]);
-    } else if(discomfortIndex>=75){
-      msg += pickRandom([
-        ` 불쾌지수도 ${Math.round(discomfortIndex)}로 높은 편이라 좀 후덥지근할 수 있어. 물 자주 마셔줘!`,
-        ` 불쾌지수 ${Math.round(discomfortIndex)}, 절반 정도는 불쾌감을 느끼는 수준이야. 가벼운 옷차림 유지해봐!`
-      ]);
-    }
+  if(typeof discomfortIndex === 'number' && discomfortIndex>=80){
+    candidates.push(pickRandom([
+      `불쾌지수가 ${Math.round(discomfortIndex)}(매우높음)이라, 오늘은 물 충분히 마시고 야외활동은 좀 자제하는 걸 추천해`,
+      `불쾌지수 ${Math.round(discomfortIndex)}로 최고 단계야. 에어컨이나 제습기로 실내 온습도 조절하는 게 좋겠어!`
+    ]));
+  } else if(typeof discomfortIndex === 'number' && discomfortIndex>=75){
+    candidates.push(pickRandom([
+      `오늘은 후덥지근할 수 있으니(불쾌지수 ${Math.round(discomfortIndex)}) 물을 자주 마시는 걸 추천해`,
+      `불쾌지수가 ${Math.round(discomfortIndex)}로 높은 편이야, 가벼운 옷차림 유지해봐!`
+    ]));
   }
 
-  return msg;
+  return pickRandom(candidates);
 }
 // 지금 당장은 비/눈이 없어도, 확인 시점 이후 최대 8시간 안에 강수확률이 높아지는 시간대가
 // 있으면 그 시각을 찾아줌 (renderHourly와 같은 hourly 배열/시간 형식을 그대로 씀)
