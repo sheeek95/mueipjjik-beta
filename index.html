@@ -147,10 +147,14 @@
     flex-shrink:0; font-size:11px; color:var(--ink-soft); background:var(--line); border:none;
     border-radius:999px; padding:5px 10px; cursor:pointer; white-space:nowrap;
   }
+  .outfit-palette-row{ display:flex; gap:8px; margin-top:8px; }
+  .outfit-palette-swatch{
+    width:38px; height:38px; border-radius:11px; flex-shrink:0; display:flex;
+    align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06);
+  }
+  .outfit-palette-swatch svg{ width:20px; height:20px; fill:#fff; opacity:.92; }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:6px 12px 6px 8px; border-radius:12px; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
-  .item-icon{ width:20px; height:20px; flex-shrink:0; }
-  .item-icon svg{ width:100%; height:100%; display:block; }
+  .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
 
   /* ---------- chat ---------- */
@@ -382,6 +386,7 @@
         <div class="outfit-tier" id="outfitTier">추천 옷차림</div>
         <button class="outfit-cycle-btn" id="outfitCycleBtn" onclick="cycleOutfit()" style="display:none;">🔄 다른 코디 보기</button>
       </div>
+      <div class="outfit-palette-row" id="outfitPaletteRow"></div>
       <div class="outfit-items" id="outfitItems"></div>
       <div class="style-tip" id="styleTip"></div>
     </div>
@@ -1031,9 +1036,13 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   else if(isRain) extraTags.push('우산', '방수 신발');
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
+  // 추천 코디의 색 조합을 아이콘이 올라간 컬러 스와치로 미리 보여줌 (옷 태그 목록과는 별개 줄)
+  document.getElementById('outfitPaletteRow').innerHTML =
+    pieces.map((i,n)=>`<div class="outfit-palette-swatch" style="background:${pieceColors[n]}" title="${escapeHtml(i)}">${iconSvgFor(i)}</div>`).join('');
+
   document.getElementById('outfitItems').innerHTML =
-    pieces.map((i,n)=>`<div class="item-tag" data-item="${escapeHtml(i)}"><span class="item-icon" style="color:${pieceColors[n]}">${iconSvgFor(i)}</span>${i}</div>`).join('') +
-    extraTags.map(i=>`<div class="extra-tag" data-item="${escapeHtml(i)}"><span class="item-icon" style="color:#B45A34">${iconSvgFor(i)}</span>${i}</div>`).join('');
+    pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
+    extraTags.map(i=>`<div class="extra-tag" data-item="${escapeHtml(i)}">+ ${i}</div>`).join('');
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
   const upcomingRain = state.lastWeather && state.lastWeather.upcomingRain;
