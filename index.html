@@ -148,7 +148,9 @@
     border-radius:999px; padding:5px 10px; cursor:pointer; white-space:nowrap;
   }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-  .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
+  .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:6px 12px 6px 8px; border-radius:12px; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
+  .item-icon{ width:20px; height:20px; flex-shrink:0; }
+  .item-icon svg{ width:100%; height:100%; display:block; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
 
   /* ---------- chat ---------- */
@@ -793,18 +795,98 @@ function getOutfitOptions(feel, style){
   const options = (STYLE_OUTFITS[idx] && STYLE_OUTFITS[idx][style]) || STYLE_OUTFITS[idx]['캐주얼'];
   return { idx, options };
 }
+// 스타일별 색상 팔레트(각 8색). 기온대(idx)가 추울수록 팔레트 뒤쪽(짙은 톤)을, altIndex가 바뀔
+// 때마다 다른 색을 쓰도록 공식으로 골라서 200개 조합(8개 기온대 x 5개 스타일 x 5개 대안) 전부가
+// 저마다 다른 색 조합을 갖게 함 — 색을 200개 다 손으로 정하는 대신, 이 공식이 그 역할을 함.
+const STYLE_COLOR_BANK = {
+  '캐주얼': ['#F5F0E6','#EDEAE3','#8FADC7','#4A6FA5','#D9C2A6','#C97B4A','#7D7D7D','#333333'],
+  '로맨틱': ['#FBF0DD','#F7C6D9','#F2A9C4','#D8C8EC','#C9B8E8','#C6E8D8','#F2998A','#8B5E6B'],
+  '미니멀': ['#FAFAFA','#E4D9C7','#D3C4AC','#A8A8A8','#6E6E6E','#33445C','#2B2B2B','#EDEDED'],
+  '포멀':   ['#FFFFFF','#C6A06E','#223A5E','#3D3D3D','#6E2C3B','#8A8A8A','#0F1F33','#B9A98A'],
+  '스트릿': ['#1C1C1C','#7C7A54','#C23A3A','#D8A93A','#556878','#3A3A3A','#8F8F79','#464646']
+};
+function pickColorIndex(bankLen, tierIdx, altIndex, seedOffset){
+  const seasonBias = Math.floor((tierIdx/7) * (bankLen-3)); // 추울수록 팔레트 뒤쪽(짙은 톤)으로
+  return (seasonBias + altIndex*2 + seedOffset) % bankLen;
+}
+function getComboColors(tierIdx, style, altIndex, hasOnepiece){
+  const bank = STYLE_COLOR_BANK[style] || STYLE_COLOR_BANK['캐주얼'];
+  const topColor = bank[pickColorIndex(bank.length, tierIdx, altIndex, 0)];
+  const bottomColor = bank[pickColorIndex(bank.length, tierIdx, altIndex, 3)];
+  return hasOnepiece ? {onepiece:topColor} : {top:topColor, bottom:bottomColor};
+}
 function getOutfitPieces(feel, style, altIndex){
   const { idx, options } = getOutfitOptions(feel, style);
   const safeIdx = ((altIndex||0) % options.length + options.length) % options.length;
   const outfit = options[safeIdx];
+  const colors = getComboColors(idx, style, safeIdx, !!outfit.onepiece);
   const pieces = [];
+  const pieceColors = [];
   if(outfit.onepiece){
-    outfit.onepiece.split('+').forEach(p=>pieces.push(p));
+    outfit.onepiece.split('+').forEach(p=>{ pieces.push(p); pieceColors.push(colors.onepiece); });
   } else {
-    if(outfit.top) outfit.top.split('+').forEach(p=>pieces.push(p));
-    if(outfit.bottom) outfit.bottom.split('+').forEach(p=>pieces.push(p));
+    if(outfit.top) outfit.top.split('+').forEach(p=>{ pieces.push(p); pieceColors.push(colors.top); });
+    if(outfit.bottom) outfit.bottom.split('+').forEach(p=>{ pieces.push(p); pieceColors.push(colors.bottom); });
   }
-  return { idx, tier:TIERS[idx], pieces, altCount: options.length };
+  return { idx, tier:TIERS[idx], pieces, pieceColors, altCount: options.length };
+}
+
+/* =============== 코디 아이템 실루엣 아이콘 =============== */
+// 아이템 이름(문자열)을 실루엣 아이콘 카테고리로 분류함. 구체적인 키워드부터 검사해야 오분류가 안 남
+// (예: "니트 가디건"은 가디건으로, "니트"는 니트로 — 순서가 중요함).
+function matchIconCategory(name){
+  const n = name || '';
+  if(n.includes('목도리')) return 'scarf';
+  if(n.includes('우산')) return 'umbrella';
+  if(n.includes('신발') || n.includes('스니커즈') || n.includes('로퍼') || n.includes('구두') || n.includes('슈즈')) return 'shoes';
+  if(n.includes('패딩')) return 'padding';
+  if(n.includes('코트') || n.includes('무스탕')) return 'coat';
+  if(n.includes('가디건')) return 'cardigan';
+  if(n.includes('블레이저') || n.includes('자켓') || n.includes('집업') || n.includes('블루종') || n.includes('바람막이')) return 'jacket';
+  if(n.includes('베스트') || n.includes('조끼')) return 'vest';
+  if(n.includes('후드')) return 'hoodie';
+  if(n.includes('니트') || n.includes('터틀넥')) return 'knit';
+  if(n.includes('셔츠') || n.includes('블라우스')) return 'shirt';
+  if(n.includes('맨투맨')) return 'sweatshirt';
+  if(n.includes('원피스')) return 'dress';
+  if(n.includes('스커트')) return 'skirt';
+  if(n.includes('레깅스')) return 'leggings';
+  if(n.includes('청바지') || n.includes('데님')) return 'jeans';
+  if(n.includes('슬랙스')) return 'slacks';
+  if(n.includes('조거') || n.includes('카고')) return 'jogger';
+  if(n.includes('반바지') || n.includes('숏팬츠')) return 'shorts';
+  if(n.includes('팬츠') || n.includes('바지')) return 'slacks';
+  if(n.includes('탱크탑') || n.includes('슬리브리스') || n.includes('크롭 탑')) return 'tank';
+  return 'tshirt';
+}
+// 24x24 실루엣 아이콘 세트. currentColor로 채워서 CSS color(=조합별 배정색)로 색을 입힘.
+const ICON_SVGS = {
+  tshirt:     '<path d="M9,3 L4,6.5 L6,10 L8,8.5 L8,20 L16,20 L16,8.5 L18,10 L20,6.5 L15,3 C15,5.2 9,5.2 9,3 Z"/>',
+  tank:       '<rect x="8" y="7" width="8" height="13" rx="1.2"/><rect x="9" y="2" width="1.6" height="6"/><rect x="13.4" y="2" width="1.6" height="6"/>',
+  sweatshirt: '<path d="M7,4 L2,7 L2,12 L6,12 L6,21 L18,21 L18,12 L22,12 L22,7 L17,4 C17,6.3 7,6.3 7,4 Z"/>',
+  hoodie:     '<path d="M12,1 C9.3,1 8.7,3.3 9,5 L4,8.5 L6,12.5 L8.3,11 L8.3,22 L15.7,22 L15.7,11 L18,12.5 L20,8.5 L15,5 C15.3,3.3 14.7,1 12,1 Z"/><circle cx="10" cy="7.5" r="0.7"/><circle cx="14" cy="7.5" r="0.7"/>',
+  knit:       '<path d="M12,1 C10,1 9.3,2.6 9.3,4.2 L5,7 L7,11 L9.3,9.5 L9.3,21 L14.7,21 L14.7,9.5 L17,11 L19,7 L14.7,4.2 C14.7,2.6 14,1 12,1 Z"/>',
+  shirt:      '<path d="M9,3 L6,5 L8,7.2 L9.5,5.6 L9.5,21 L14.5,21 L14.5,5.6 L16,7.2 L18,5 L15,3 L12,6.3 Z"/>',
+  cardigan:   '<path d="M4,8 L7,6 L7,21 L4,21 Z"/><path d="M20,8 L17,6 L17,21 L20,21 Z"/><rect x="8.2" y="5.5" width="3.4" height="15.5"/><rect x="12.4" y="5.5" width="3.4" height="15.5"/>',
+  vest:       '<path d="M8,4 L8,21 L11,21 L11,6.5 L12,5 L13,6.5 L13,21 L16,21 L16,4 L13.5,4 L12,7 L10.5,4 Z"/>',
+  jacket:     '<path d="M8,4 L4,7 L6,11 L9,9.3 L9,21 L11,21 L11,6 L12,8 L13,6 L13,21 L15,21 L15,9.3 L18,11 L20,7 L16,4 L13,7.5 L12,5.5 L11,7.5 Z"/>',
+  coat:       '<path d="M8,4 L4,7 L6,11 L9,9.3 L9,23 L11,23 L11,6 L12,8 L13,6 L13,23 L15,23 L15,9.3 L18,11 L20,7 L16,4 L13,7.5 L12,5.5 L11,7.5 Z"/>',
+  padding:    '<rect x="7" y="5" width="10" height="4" rx="2"/><rect x="6.5" y="9" width="11" height="4" rx="2"/><rect x="6.5" y="13" width="11" height="4" rx="2"/><rect x="7" y="17" width="10" height="5" rx="2"/>',
+  dress:      '<path d="M9,3 L7,5 L9,7 L9,10 L5,22 L19,22 L15,10 L15,7 L17,5 L15,3 L12,5.3 Z"/>',
+  skirt:      '<path d="M9,7 L15,7 L19,21 L5,21 Z"/>',
+  jeans:      '<rect x="7" y="4" width="10" height="3" rx="1"/><rect x="7" y="7" width="4.3" height="14" rx="1"/><rect x="12.7" y="7" width="4.3" height="14" rx="1"/>',
+  slacks:     '<rect x="7" y="4" width="10" height="3" rx="1"/><path d="M7,7 L11.3,7 L10.5,21 L7.8,21 Z"/><path d="M12.7,7 L17,7 L16.2,21 L13.5,21 Z"/>',
+  shorts:     '<rect x="7" y="4" width="10" height="3" rx="1"/><rect x="7" y="7" width="4.3" height="7" rx="1"/><rect x="12.7" y="7" width="4.3" height="7" rx="1"/>',
+  jogger:     '<rect x="7" y="4" width="10" height="3" rx="1"/><path d="M7,7 L11.3,7 L10.8,18 L7.5,18 Z"/><rect x="7.3" y="18" width="3.2" height="3" rx="1"/><path d="M12.7,7 L17,7 L16.5,18 L13.2,18 Z"/><rect x="13" y="18" width="3.2" height="3" rx="1"/>',
+  leggings:   '<rect x="7" y="4" width="10" height="3" rx="1"/><rect x="8" y="7" width="3.2" height="16" rx="1.5"/><rect x="12.8" y="7" width="3.2" height="16" rx="1.5"/>',
+  scarf:      '<path d="M4,8 Q12,4 20,8 L20,11 Q12,7 4,11 Z"/><rect x="10.3" y="10" width="3" height="10" rx="1.5"/>',
+  shoes:      '<path d="M3,18.5 L3,15 Q3,13 5,13 L9,13 L13,10 L19,10 Q21,10 21,13.5 L21,17 Q21,19 19,19 L4,19 Q3,19 3,18.5 Z"/>',
+  umbrella:   '<path d="M12,2 C18,2 22,9 22,13 L2,13 C2,9 6,2 12,2 Z"/><rect x="11.3" y="13" width="1.4" height="8"/><path d="M9,21 Q9,23 11,23 L11.3,23 L11.3,21 Z"/>'
+};
+function iconSvgFor(name){
+  const cat = matchIconCategory(name);
+  const inner = ICON_SVGS[cat] || ICON_SVGS.tshirt;
+  return `<svg viewBox="0 0 24 24" fill="currentColor">${inner}</svg>`;
 }
 function renderStyleChips(){
   const wrap = document.getElementById('styleScroll');
@@ -935,7 +1017,7 @@ function cycleOutfit(){
   renderOutfitVariant(feel, rainProb, windSpeed, wcode);
 }
 function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
-  const {idx, tier, pieces, altCount} = getOutfitPieces(feel, state.style, state.outfitAltIndex);
+  const {idx, tier, pieces, pieceColors, altCount} = getOutfitPieces(feel, state.style, state.outfitAltIndex);
   const isSnow = SNOW_CODES.has(wcode);
   const isRain = RAIN_CODES.has(wcode) || rainProb>=50;
 
@@ -950,8 +1032,8 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
   document.getElementById('outfitItems').innerHTML =
-    pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
-    extraTags.map(i=>`<div class="extra-tag" data-item="${escapeHtml(i)}">+ ${i}</div>`).join('');
+    pieces.map((i,n)=>`<div class="item-tag" data-item="${escapeHtml(i)}"><span class="item-icon" style="color:${pieceColors[n]}">${iconSvgFor(i)}</span>${i}</div>`).join('') +
+    extraTags.map(i=>`<div class="extra-tag" data-item="${escapeHtml(i)}"><span class="item-icon" style="color:#B45A34">${iconSvgFor(i)}</span>${i}</div>`).join('');
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
   const upcomingRain = state.lastWeather && state.lastWeather.upcomingRain;
