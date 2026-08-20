@@ -95,6 +95,15 @@ async function fetchKmaWeather(env, lat, lon) {
       hourly.precipitation_probability.push(Number(s.POP) || 0);
     });
 
+    // 단기예보(vilage)는 몇 시간 전에 발표된 값이라 "이번 시간대" 예보가 실제 상황(방금 시작된 비 등)을
+    // 못 따라잡을 수 있음. 시간별 캐러셀의 "지금" 칸이 상단 요약(=초단기실황 기반 실제 관측)과 다른
+    // 소리를 하지 않도록, 첫 칸이 정말 지금 시간대일 때는 실황값으로 덮어씀
+    if (hourlySource.length && `${hourlySource[0].date}${hourlySource[0].time}` === nowSlotKey) {
+      hourly.temperature_2m[0] = t1h;
+      hourly.weather_code[0] = wcode;
+      if (ptyNow !== 0) hourly.precipitation_probability[0] = Math.max(hourly.precipitation_probability[0], 100);
+    }
+
     return {
       source: 'kma',
       current: {
