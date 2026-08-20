@@ -152,7 +152,7 @@
     width:38px; height:38px; border-radius:11px; flex-shrink:0; display:flex;
     align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06);
   }
-  .outfit-palette-swatch svg{ width:20px; height:20px; fill:#fff; opacity:.92; }
+  .outfit-palette-swatch svg{ width:20px; height:20px; fill:currentColor; opacity:.92; }
   .outfit-items{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
   .item-tag, .extra-tag{ background:#FFF1E9; color:#B45A34; padding:7px 12px; border-radius:12px; font-size:13px; }
   .style-tip{ font-size:13px; color:var(--ink-soft); background:#FBF6EF; border-radius:12px; padding:10px 12px; margin-top:6px;}
@@ -893,6 +893,16 @@ function iconSvgFor(name){
   const inner = ICON_SVGS[cat] || ICON_SVGS.tshirt;
   return `<svg viewBox="0 0 24 24" fill="currentColor">${inner}</svg>`;
 }
+// 스와치 배경이 밝은 색(흰색/파스텔 등)이면 흰 아이콘이 안 보이니, 배경 밝기에 따라
+// 아이콘 색을 흰색/어두운 잉크색 중 하나로 자동으로 바꿔서 항상 잘 보이게 함
+function contrastIconColor(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if(!m) return '#FFFFFF';
+  const n = parseInt(m[1], 16);
+  const r = (n>>16)&255, g=(n>>8)&255, b=n&255;
+  const brightness = (r*299 + g*587 + b*114) / 1000;
+  return brightness > 150 ? '#3E2F2A' : '#FFFFFF';
+}
 function renderStyleChips(){
   const wrap = document.getElementById('styleScroll');
   wrap.innerHTML = STYLES.map(s=>`<div class="style-chip ${s===state.style?'selected':''}" onclick="selectStyle('${s}')">${s}</div>`).join('');
@@ -1036,9 +1046,10 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   else if(isRain) extraTags.push('우산', '방수 신발');
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
-  // 추천 코디의 색 조합을 아이콘이 올라간 컬러 스와치로 미리 보여줌 (옷 태그 목록과는 별개 줄)
+  // 추천 코디의 색 조합을 아이콘이 올라간 컬러 스와치로 미리 보여줌 (옷 태그 목록과는 별개 줄).
+  // 배경이 밝으면 아이콘을 어두운 색으로 자동 반전해서 흰 배경에 흰 아이콘처럼 안 보이는 일이 없게 함
   document.getElementById('outfitPaletteRow').innerHTML =
-    pieces.map((i,n)=>`<div class="outfit-palette-swatch" style="background:${pieceColors[n]}" title="${escapeHtml(i)}">${iconSvgFor(i)}</div>`).join('');
+    pieces.map((i,n)=>`<div class="outfit-palette-swatch" style="background:${pieceColors[n]}; color:${contrastIconColor(pieceColors[n])}" title="${escapeHtml(i)}">${iconSvgFor(i)}</div>`).join('');
 
   document.getElementById('outfitItems').innerHTML =
     pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
