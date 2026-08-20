@@ -23,7 +23,8 @@ import { searchYoutubeTrend } from '../../lib/youtube.js';
 const SYSTEM_PROMPT =
   "너는 '핏치'라는 귀엽고 친절한 햄스터 패션 요정이야. 다정하고 친근한 반말로 답해. " +
   "질문으로 시작하지 말고 바로 추천/답변부터 말해. 2~3문장으로 짧고 간결하게 끝내, 이모지는 가끔만. " +
-  "반드시 자연스러운 한국어 문장으로만 답하고, 영어·한자·다른 외국어 단어를 절대 섞지 마. " +
+  "반드시 자연스러운 한국어 문장으로만 답하고, 영어·한자·키릴 문자·다른 외국어는 단어는 물론 " +
+  "글자 하나도 섞지 마. " +
   "별표(*), 마크다운 기호, 번호 매기기는 쓰지 말고 대화하듯 문장을 이어서 말해. " +
   "문장을 '~것 같아', '~는데'로 얼버무리며 끝내지 말고 '~할게', '~수 있어', '~돼'처럼 확실하고 " +
   "자연스럽게 끝내. 물음표(?)로 끝나는 반문이나 '~하고 싶다면?' 같은 되묻는 말투는 절대 쓰지 마. " +
@@ -81,6 +82,7 @@ export async function onRequestPost(context) {
     const history = sanitizeHistory(body && body.history);
 
     let reply;
+    let lastResult;
     if (imageBlock) {
       // llama-3.2-11b-vision-instruct는 messages가 아니라 image(byte 배열) + prompt(문자열) 형식을 받음
       const binary = atob(imageBlock.source.data);
@@ -91,26 +93,30 @@ export async function onRequestPost(context) {
         ? `\n\n[지금까지의 대화]\n${history.map((m) => `${m.role === 'user' ? '사용자' : '핏치'}: ${m.content}`).join('\n')}`
         : '';
 
-      const result = await runAI(env, VISION_MODEL, {
-        image: Array.from(bytes),
-        prompt: `${systemPrompt}${historyText}\n\n사용자: ${userText}`,
-        max_tokens: MAX_TOKENS,
-        temperature: 0.4,
+      reply = await getCleanReply(async () => {
+        lastResult = await runAI(env, VISION_MODEL, {
+          image: Array.from(bytes),
+          prompt: `${systemPrompt}${historyText}\n\n사용자: ${userText}`,
+          max_tokens: MAX_TOKENS,
+          temperature: 0.4,
+        });
+        return lastResult && lastResult.response;
       });
-      reply = result && result.response;
-      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
+      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(lastResult) }, 500);
     } else {
-      const result = await runAI(env, TEXT_MODEL, {
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...history,
-          { role: 'user', content: userText },
-        ],
-        max_tokens: MAX_TOKENS,
-        temperature: 0.4,
+      reply = await getCleanReply(async () => {
+        lastResult = await runAI(env, TEXT_MODEL, {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...history,
+            { role: 'user', content: userText },
+          ],
+          max_tokens: MAX_TOKENS,
+          temperature: 0.4,
+        });
+        return lastResult && lastResult.response;
       });
-      reply = result && result.response;
-      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(result) }, 500);
+      if (!reply) return jsonResponse({ error: 'AI 응답을 가져오지 못했어요.', debug: safeStringify(lastResult) }, 500);
     }
 
     return jsonResponse({ reply });
@@ -146,6 +152,29 @@ function sanitizeHistory(history) {
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-6)
     .map((m) => ({ role: m.role, content: m.content.slice(0, 500) }));
+}
+
+// 작은 모델이 이따금 한글 단어 중간에 키릴 문자·로마자 등 엉뚱한 글자를 섞어서 생성하는 경우가
+// 있음(예: "가디건"이 "카드иг런"처럼 깨짐). 프롬프트로는 100% 막기 어려운 확률적 생성 오류라,
+// 응답에 한글/숫자/흔한 문장부호/이모지 외의 문자가 남으면 이상 발생으로 보고 처리함.
+const ALLOWED_CHAR_RE = /[가-힣ㄱ-ㅎᄀ-ᇿ0-9\s.,!?~()%'"·\-–—:;…/℃☀-➿←-⇿‍️]/gu;
+const EMOJI_RE = /\p{Extended_Pictographic}/gu;
+function hasForeignGlyphs(text) {
+  if (typeof text !== 'string' || !text) return false;
+  const leftover = text.replace(ALLOWED_CHAR_RE, '').replace(EMOJI_RE, '');
+  return leftover.length > 0;
+}
+// 한 번 이상한 글자가 섞여 나오면(확률적 오류라 재시도하면 정상 생성될 때가 많음) 한 번 더 시도하고,
+// 그래도 안 되면 안전한 대체 문구로 바꿔치기함
+async function getCleanReply(fetchReplyFn) {
+  let reply = await fetchReplyFn();
+  if (reply && hasForeignGlyphs(reply)) {
+    reply = await fetchReplyFn();
+  }
+  if (reply && hasForeignGlyphs(reply)) {
+    reply = '앗, 지금 답변이 이상하게 나왔어! 다시 한 번 물어봐줄래? 🐹';
+  }
+  return reply;
 }
 
 function safeStringify(obj) {
