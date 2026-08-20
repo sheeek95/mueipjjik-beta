@@ -820,6 +820,12 @@ function getComboColors(tierIdx, style, altIndex, hasOnepiece){
   const bottomColor = bank[pickColorIndex(bank.length, tierIdx, altIndex, 3)];
   return hasOnepiece ? {onepiece:topColor} : {top:topColor, bottom:bottomColor};
 }
+// 신발/목도리/우산/바람막이 같은 액세서리(extraTags)에도 같은 팔레트에서 색을 배정함
+// (top=시드 0, bottom=시드 3과 겹치지 않도록 시드 6부터 위치별로 배정)
+function getExtraColor(tierIdx, style, altIndex, position){
+  const bank = STYLE_COLOR_BANK[style] || STYLE_COLOR_BANK['캐주얼'];
+  return bank[pickColorIndex(bank.length, tierIdx, altIndex, 6 + position)];
+}
 function getOutfitPieces(feel, style, altIndex){
   const { idx, options } = getOutfitOptions(feel, style);
   const safeIdx = ((altIndex||0) % options.length + options.length) % options.length;
@@ -847,7 +853,7 @@ function matchIconCategory(name){
   if(n.includes('패딩')) return 'padding';
   if(n.includes('코트') || n.includes('무스탕')) return 'coat';
   if(n.includes('가디건')) return 'cardigan';
-  if(n.includes('블레이저') || n.includes('자켓') || n.includes('집업') || n.includes('블루종') || n.includes('바람막이')) return 'jacket';
+  if(n.includes('블레이저') || n.includes('자켓') || n.includes('집업') || n.includes('블루종') || n.includes('바람막이') || n.includes('아우터')) return 'jacket';
   if(n.includes('베스트') || n.includes('조끼')) return 'vest';
   if(n.includes('후드')) return 'hoodie';
   if(n.includes('니트') || n.includes('터틀넥')) return 'knit';
@@ -1047,9 +1053,13 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   if(windSpeed>=WIND_STRONG) extraTags.push('바람막이');
 
   // 추천 코디의 색 조합을 아이콘이 올라간 컬러 스와치로 미리 보여줌 (옷 태그 목록과는 별개 줄).
+  // 신발·목도리·우산·바람막이 같은 액세서리(extraTags)도 같은 팔레트에서 색을 받아 함께 표시함.
   // 배경이 밝으면 아이콘을 어두운 색으로 자동 반전해서 흰 배경에 흰 아이콘처럼 안 보이는 일이 없게 함
+  const extraColors = extraTags.map((_, n) => getExtraColor(idx, state.style, state.outfitAltIndex, n));
+  const swatchItems = pieces.concat(extraTags);
+  const swatchColors = pieceColors.concat(extraColors);
   document.getElementById('outfitPaletteRow').innerHTML =
-    pieces.map((i,n)=>`<div class="outfit-palette-swatch" style="background:${pieceColors[n]}; color:${contrastIconColor(pieceColors[n])}" title="${escapeHtml(i)}">${iconSvgFor(i)}</div>`).join('');
+    swatchItems.map((i,n)=>`<div class="outfit-palette-swatch" style="background:${swatchColors[n]}; color:${contrastIconColor(swatchColors[n])}" title="${escapeHtml(i)}">${iconSvgFor(i)}</div>`).join('');
 
   document.getElementById('outfitItems').innerHTML =
     pieces.map(i=>`<div class="item-tag" data-item="${escapeHtml(i)}">${i}</div>`).join('') +
