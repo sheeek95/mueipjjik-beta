@@ -653,6 +653,7 @@ async function fetchWeather(){
     }
     const rainProb = data.hourly && data.hourly.precipitation_probability ? data.hourly.precipitation_probability[nowIdx] : 0;
     const upcomingRain = findUpcomingRain(data.hourly, nowIdx);
+    const discomfortIndex = calcDiscomfortIndex(cur.temperature_2m, cur.relative_humidity_2m);
 
     document.getElementById('wxTemp').textContent = temp;
     document.getElementById('wxFeel').textContent = feel;
@@ -664,7 +665,7 @@ async function fetchWeather(){
 
     renderHourly(data.hourly, nowIdx);
 
-    state.lastWeather = {feel, rainProb, windSpeed, wcode, upcomingRain};
+    state.lastWeather = {feel, rainProb, windSpeed, wcode, upcomingRain, discomfortIndex};
     renderOutfit(feel, rainProb, windSpeed, wcode);
   }catch(e){
     document.getElementById('wxDesc').textContent = '날씨 정보를 불러오지 못했어';
@@ -826,7 +827,7 @@ function pickRandom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 // "핏치의 한마디"를 매번 똑같은 문장이 아니라, 상황별로 여러 문구 중 하나를 골라 조합해서 만듦.
 // 체감온도 구간별로 다른 톤의 추천 멘트를 주고, 지금 당장은 안 오지만 곧 비 소식이 있으면
 // 몇 시쯤인지 콕 집어서 우산을 챙기라고 알려줌(upcomingRain, findUpcomingRain 참고).
-function buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain){
+function buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain, discomfortIndex){
   const openers = feel>=33 ? [
     `체감 ${feel}℃, 푹푹 찌는 더위야! 최대한 가볍고 시원하게 입어~`,
     `체감 ${feel}℃면 진짜 더운 날씨야. 통풍 잘 되는 소재로 시원하게 입는 걸 추천해`,
@@ -868,6 +869,20 @@ function buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomi
     msg += pickRandom([' 아침·저녁 기온차 있을 수 있으니 겉옷 하나 들고 나가는 거 추천!', ' 낮이랑 밤 기온차가 있을 수 있어서 얇은 겉옷 하나 챙기면 좋아!']);
   }
 
+  if(typeof discomfortIndex === 'number'){
+    if(discomfortIndex>=80){
+      msg += pickRandom([
+        ` 게다가 불쾌지수도 ${Math.round(discomfortIndex)}로 최고 단계야. 물 충분히 마시고 야외활동은 좀 자제하는 게 좋겠어!`,
+        ` 불쾌지수까지 ${Math.round(discomfortIndex)}(매우높음)라 다들 후덥지근하게 느낄 거야. 에어컨·제습기로 실내 온습도 조절해줘!`
+      ]);
+    } else if(discomfortIndex>=75){
+      msg += pickRandom([
+        ` 불쾌지수도 ${Math.round(discomfortIndex)}로 높은 편이라 좀 후덥지근할 수 있어. 물 자주 마셔줘!`,
+        ` 불쾌지수 ${Math.round(discomfortIndex)}, 절반 정도는 불쾌감을 느끼는 수준이야. 가벼운 옷차림 유지해봐!`
+      ]);
+    }
+  }
+
   return msg;
 }
 // 지금 당장은 비/눈이 없어도, 확인 시점 이후 최대 8시간 안에 강수확률이 높아지는 시간대가
@@ -880,6 +895,13 @@ function findUpcomingRain(hourly, nowIdx){
     }
   }
   return null;
+}
+// 불쾌지수(Thom, 1957) — 기상청이 쓰는 섭씨 버전 공식. RH는 %로 받아서 내부에서 0~1로 변환함.
+// 80 이상 매우높음, 75~80 높음, 68~75 보통, 68 미만 낮음(공식 기준)
+function calcDiscomfortIndex(temp, humidityPercent){
+  if(typeof temp !== 'number' || typeof humidityPercent !== 'number') return null;
+  const rh = humidityPercent / 100;
+  return 1.8*temp - 0.55*(1-rh)*(1.8*temp-26) + 32;
 }
 // 날씨/스타일이 바뀌었을 때 부르는 진입점: 항상 그 조합의 "기본" 코디(0번)부터 다시 보여줌
 function renderOutfit(feel, rainProb, windSpeed, wcode){
@@ -914,9 +936,10 @@ function renderOutfitVariant(feel, rainProb, windSpeed, wcode){
   document.getElementById('styleTip').textContent = `💡 ${flavor.tip}`;
 
   const upcomingRain = state.lastWeather && state.lastWeather.upcomingRain;
-  document.getElementById('fairyTip').textContent = buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain);
+  const discomfortIndex = state.lastWeather && state.lastWeather.discomfortIndex;
+  document.getElementById('fairyTip').textContent = buildFairyTip(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain, discomfortIndex);
 
-  state.notis = generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain);
+  state.notis = generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain, discomfortIndex);
   renderNotis();
 }
 function escapeHtml(s){
@@ -1176,7 +1199,7 @@ function formatNowTime(){
   return `${ampm} ${h12}:${m}`;
 }
 // 실제 날씨/코디 계산 결과를 바탕으로 상황에 맞는 알림 목록을 만듦 (하드코딩된 문구 없음)
-function generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain){
+function generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomingRain, discomfortIndex){
   const time = formatNowTime();
   const notis = [];
   if(isSnow){
@@ -1196,6 +1219,11 @@ function generateNotis(feel, rainProb, isSnow, isRain, windSpeed, pieces, upcomi
   }
   if(!isSnow && !isRain && windSpeed<WIND_BREEZY && Math.abs(feel-15)<8){
     notis.push({emoji:'🌡️', text:'오늘은 기온차가 있는 편이니 얇은 겉옷을 챙겨가는 걸 추천해!', time});
+  }
+  if(typeof discomfortIndex === 'number' && discomfortIndex>=80){
+    notis.push({emoji:'😖', text:`불쾌지수 ${Math.round(discomfortIndex)}(매우높음)! 물 충분히 마시고 야외활동은 자제하는 게 좋겠어`, time});
+  } else if(typeof discomfortIndex === 'number' && discomfortIndex>=75){
+    notis.push({emoji:'😓', text:`불쾌지수 ${Math.round(discomfortIndex)}로 높은 편이야. 가벼운 옷차림 유지하고 물 자주 마셔줘!`, time});
   }
   notis.push({emoji:'👕', text:`오늘 추천 코디가 도착했어! ${pieces[0]} 위주로 준비해봐`, time});
   return notis;
